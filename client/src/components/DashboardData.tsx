@@ -7,6 +7,16 @@ import { Loader2 } from "lucide-react";
 export default function DashboardData() {
   const { fileId, filters } = useData();
 
+  const queryParams = new URLSearchParams();
+  if (filters.temporada) queryParams.set('temporada', filters.temporada);
+  if (filters.familia) queryParams.set('familia', filters.familia);
+  if (filters.tiendas && filters.tiendas.length > 0) {
+    queryParams.set('tiendas', filters.tiendas.join(','));
+  }
+
+  const queryString = queryParams.toString();
+  const apiUrl = `/api/dashboard/${fileId}${queryString ? `?${queryString}` : ''}`;
+
   const { data: dashboardData, isLoading, error } = useQuery<{
     kpis: {
       ventasBrutas: number;
@@ -37,7 +47,7 @@ export default function DashboardData() {
       beneficio: number;
     }>;
   }>({
-    queryKey: ["/api/dashboard", fileId, filters],
+    queryKey: [apiUrl, fileId, filters],
     enabled: !!fileId,
   });
 

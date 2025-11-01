@@ -29,7 +29,7 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
     tiendasNaelle: string[];
     tiendasItalia: string[];
   }>({
-    queryKey: ["/api/filters", fileId],
+    queryKey: [`/api/filters/${fileId}`, fileId],
     enabled: !!fileId,
   });
 
