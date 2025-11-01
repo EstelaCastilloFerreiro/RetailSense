@@ -20,6 +20,10 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
 - ✅ Column mappings aligned with actual Spanish headers (Artículo, NombreTPV, Fecha Documento, Descripción Color)
 - ✅ Filter UX improved: selections are local until "Aplicar Filtros" button is clicked
 - ✅ Processing 114,684 ventas, 5,165 productos, 14,039 traspasos from real client data
+- ✅ Login page implemented with "Retail Analytics" branding and KLOB logo
+- ✅ Protected routes system using localStorage authentication
+- ✅ KPI numbers size reduced (text-2xl) for better visual balance
+- 🚧 In progress: Completing all 4 dashboard sections with Streamlit feature parity
 
 ## User Preferences
 
