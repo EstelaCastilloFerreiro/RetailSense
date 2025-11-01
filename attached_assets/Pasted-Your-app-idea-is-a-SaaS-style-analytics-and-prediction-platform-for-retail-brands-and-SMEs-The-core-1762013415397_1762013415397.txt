@@ -1,0 +1,86 @@
+Your app idea is a SaaS-style analytics and prediction platform for retail brands and SMEs. The core value is: the client uploads their historical data (Excel/CSV, sometimes with several sheets like sales, transfers, inventory, campaigns) and the app automatically cleans it, applies a client-specific preprocessing pipeline, runs demand/pricing models, and shows a ready-to-use purchasing/pricing dashboard.
+Here’s the description, then the migration approach.
+1. App idea
+What it does
+Web app where the customer logs in and uploads one or several Excel/CSV files (different structures per customer are allowed).
+The app detects sheet/column structure and applies a saved preprocessing pipeline per customer (so next time the same customer uploads, it’s automatic).
+After preprocessing, the app generates a dashboard with the KPIs you defined for retail:
+Projected demand by product / region / store
+Optimal price per product and discount recommendations
+Inventory vs forecasted demand
+Top 10 products
+Sales by region / store
+Campaign impact and comparison
+OTB metrics (number of options, depth, units, total PVP, total cost, markdown)
+There is also a predictive part (ML in Python) to:
+predict units to buy / produce,
+optimize prices,
+and recommend discounts that don’t break margin.
+All of this must be done considering the financial situation and real results of the company (2023, Feb-24, Oct-24 data) because the goal is to generate profit, not just volume.
+In one sentence:
+A web app where a retail client uploads their data and immediately gets a purchasing plan + pricing recommendations + sales/inventory dashboard, personalized to their own data structure.
+2. Why migrate away from Streamlit
+Right now, in Streamlit:
+the UI and the business logic are mixed in the same .py,
+filters (store, family, season) are rendered directly in the sidebar,
+and the dashboard is rendered inside Streamlit.
+That’s good for prototyping, but you want:
+a cleaner, corporate UI (your KLOB look: dark/neutral/maroon, KPIs in green/red),
+a structure that supports multi-tenant (one pipeline per client),
+and a frontend you can control (tabs, branding, auth).
+So you want to keep the Python logic (the part that loads Excel, applies the pipeline, and runs the ML) but move the interface to something more production-like: Dash or React.
+3. Migration path: Streamlit → Dash
+This is the “Python-only” migration.
+Idea
+Keep everything in Python.
+Replace Streamlit with Dash (Plotly) to get more control over layout, tabs, and callbacks.
+Use your current functions (preprocess_*, your demand/pricing model, the logic that groups by family/season/store) and just call them inside Dash callbacks.
+How
+Extract all data logic from app.py / dashboard.py into a module, e.g. services/data_processing.py.
+Build a Dash app with:
+a left sidebar with dynamic filters (store, season, family),
+top KPIs row,
+tabbed layout:
+Overview
+Stores / Geography
+Product / Campaigns / Returns
+Inventory vs Demand
+On every filter change, Dash callback → call your Python functions → return figures/tables.
+This option is faster because you don’t need a separate frontend stack.
+When to choose Dash
+You want to stay in Python.
+You don’t want to manage React/Node.
+You want something closer to what you already have.
+4. Migration path: Streamlit → React (+ Python backend)
+This is the “real” web-app migration.
+Idea
+Split the app in two:
+Backend (Python, e.g. FastAPI):
+endpoint to upload Excel/CSV
+endpoint to return filters
+endpoint to return the dashboard data (KPIs, tables, chart-series) for a given section + filters
+reuses the logic you already have in Streamlit
+Frontend (React/Next.js):
+login (later)
+sidebar filters
+4 tabs (the same as now)
+KPI cards with corporate colors
+charts in green/red depending on value
+How
+Take the Streamlit logic and turn it into pure Python functions that don’t call st.*.
+Expose those functions via FastAPI: /upload-excel, /get-filters, /dashboard.
+Build a React UI that:
+shows “KLOB” top-left,
+uses neutral/maroon/black for layout,
+and calls the API to render each section.
+Later you can add per-client pipelines (API receives client_id and loads the right preprocessing).
+When to choose React
+You want a SaaS product look.
+You want to sell this to several brands.
+You want to integrate auth, billing, roles, etc.
+5. What stays from Streamlit
+Your data model.
+Your preprocessing.
+Your demand/price logic.
+Your retail KPIs.
+Your idea of 4 analysis areas.
