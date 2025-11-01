@@ -276,17 +276,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "File not found or no data available" });
       }
 
-      // Build filters
+      // Build and normalize filters
       const filters: any = {};
-      if (temporada) filters.temporada = temporada as string;
-      if (familia) filters.familia = familia as string;
-      if (tiendas) {
-        filters.tiendas = typeof tiendas === 'string' 
-          ? tiendas.split(',').map((t: string) => t.trim())
-          : Array.isArray(tiendas) ? tiendas : [];
+      
+      // Normalize temporada
+      if (temporada && typeof temporada === 'string') {
+        filters.temporada = temporada;
       }
-      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
-      if (fechaFin) filters.fechaFin = fechaFin as string;
+      
+      // Normalize familia
+      if (familia && typeof familia === 'string') {
+        filters.familia = familia;
+      }
+      
+      // Normalize tiendas - ensure it's always an array
+      if (tiendas) {
+        if (typeof tiendas === 'string') {
+          // Split comma-separated string and trim
+          filters.tiendas = tiendas.split(',').map((t: string) => t.trim()).filter(Boolean);
+        } else if (Array.isArray(tiendas)) {
+          filters.tiendas = tiendas.map(t => String(t).trim()).filter(Boolean);
+        }
+      }
+      
+      // Normalize dates - keep as strings for now (YYYY-MM-DD format)
+      if (fechaInicio && typeof fechaInicio === 'string') {
+        filters.fechaInicio = fechaInicio;
+      }
+      if (fechaFin && typeof fechaFin === 'string') {
+        filters.fechaFin = fechaFin;
+      }
 
       const extendedData = calculateExtendedDashboardData(ventas, productos, traspasos, filters);
       res.json(extendedData);

@@ -2,14 +2,6 @@
 import type { VentasData, ProductosData, TraspasosData } from "../../shared/schema";
 import { applyFilters, type FilterOptions } from "./kpiCalculator";
 
-interface FilterOptionsInternal {
-  temporada?: string;
-  familia?: string;
-  tiendas?: string[];
-  fechaInicio?: string;
-  fechaFin?: string;
-}
-
 export interface ExtendedDashboardData {
   // Alcance del análisis
   alcance: {
@@ -87,10 +79,10 @@ export function calculateExtendedDashboardData(
   ventas: VentasData[],
   productos: ProductosData[],
   traspasos: TraspasosData[],
-  filters?: FilterOptionsInternal
+  filters?: FilterOptions
 ): ExtendedDashboardData {
   // Apply filters first if provided
-  const filteredVentas = filters ? applyFilters(ventas, filters as FilterOptions) : ventas;
+  const filteredVentas = filters ? applyFilters(ventas, filters) : ventas;
   
   // Filtrar ventas reales (sin GR.ART.FICTICIO)
   const ventasReales = filteredVentas.filter(v => v.descripcionFamilia !== 'GR.ART.FICTICIO');
@@ -114,9 +106,9 @@ export function calculateExtendedDashboardData(
     .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
   const kpisGenerales = {
-    ventasBrutas: ventasPositivasReales + devolucionesReales,
+    ventasBrutas: ventasPositivasReales,
     devoluciones: devolucionesReales,
-    totalNeto: ventasPositivasReales,
+    totalNeto: ventasPositivasReales - devolucionesReales,
     tasaDevolucion: ventasPositivasReales > 0 ? (devolucionesReales / ventasPositivasReales) * 100 : 0,
   };
   
@@ -130,9 +122,9 @@ export function calculateExtendedDashboardData(
     .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
   const kpisFicticio = {
-    ventasBrutas: ventasPositivasFicticio + devolucionesFicticio,
+    ventasBrutas: ventasPositivasFicticio,
     devoluciones: devolucionesFicticio,
-    totalNeto: ventasPositivasFicticio,
+    totalNeto: ventasPositivasFicticio - devolucionesFicticio,
     tasaDevolucion: ventasPositivasFicticio > 0 ? (devolucionesFicticio / ventasPositivasFicticio) * 100 : 0,
   };
   

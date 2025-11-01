@@ -9,7 +9,7 @@ const TIENDAS_ONLINE = [
   'TRUCCO ONLINE B2C',
 ];
 
-interface FilterOptions {
+export interface FilterOptions {
   temporada?: string;
   familia?: string;
   tiendas?: string[];

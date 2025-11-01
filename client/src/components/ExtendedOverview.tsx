@@ -81,8 +81,17 @@ export default function ExtendedOverview() {
     return `/api/dashboard-extended/${fileId}${queryString ? `?${queryString}` : ''}`;
   };
 
+  // Create stable queryKey that changes when filters change
+  const queryUrl = buildQueryUrl();
+  
   const { data, isLoading, error } = useQuery<ExtendedDashboardData>({
-    queryKey: [buildQueryUrl(), filters],
+    queryKey: ['/api/dashboard-extended', fileId, filters],
+    queryFn: async () => {
+      if (!queryUrl) throw new Error('No file ID');
+      const response = await fetch(queryUrl);
+      if (!response.ok) throw new Error('Failed to fetch dashboard data');
+      return response.json();
+    },
     enabled: !!fileId,
   });
 
