@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useData } from "@/contexts/DataContext";
 import KPICard from "./KPICard";
@@ -67,32 +68,26 @@ interface ExtendedDashboardData {
 export default function ExtendedOverview() {
   const { fileId, filters } = useData();
 
-  // Build query URL with filters
-  const buildQueryUrl = () => {
-    if (!fileId) return '';
-    const params = new URLSearchParams();
-    if (filters.temporada) params.append('temporada', filters.temporada);
-    if (filters.familia) params.append('familia', filters.familia);
-    if (filters.fechaInicio) params.append('fechaInicio', filters.fechaInicio);
-    if (filters.fechaFin) params.append('fechaFin', filters.fechaFin);
-    if (filters.tiendas && filters.tiendas.length > 0) {
-      params.append('tiendas', filters.tiendas.join(','));
-    }
-    const queryString = params.toString();
-    return `/api/dashboard-extended/${fileId}${queryString ? `?${queryString}` : ''}`;
-  };
+  const stableFilters = useMemo(() => {
+    const cleaned: Record<string, any> = {};
+    
+    if (filters.temporada) cleaned.temporada = filters.temporada;
+    if (filters.familia) cleaned.familia = filters.familia;
+    if (filters.tiendas && filters.tiendas.length > 0) cleaned.tiendas = filters.tiendas;
+    if (filters.fechaInicio) cleaned.fechaInicio = filters.fechaInicio;
+    if (filters.fechaFin) cleaned.fechaFin = filters.fechaFin;
+    
+    return cleaned;
+  }, [
+    filters.temporada,
+    filters.familia,
+    filters.tiendas?.join(','),
+    filters.fechaInicio,
+    filters.fechaFin,
+  ]);
 
-  // Create stable queryKey that changes when filters change
-  const queryUrl = buildQueryUrl();
-  
   const { data, isLoading, error } = useQuery<ExtendedDashboardData>({
-    queryKey: ['/api/dashboard-extended', fileId, filters],
-    queryFn: async () => {
-      if (!queryUrl) throw new Error('No file ID');
-      const response = await fetch(queryUrl);
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-      return response.json();
-    },
+    queryKey: ['/api/dashboard-extended', fileId, stableFilters],
     enabled: !!fileId,
   });
 

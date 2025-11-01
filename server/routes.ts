@@ -4,7 +4,12 @@ import multer from "multer";
 import { storage } from "./storage";
 import { processExcelFile, detectColumnStructure } from "./services/excelProcessor";
 import { calculateDashboardData } from "./services/kpiCalculator";
-import { calculateExtendedDashboardData } from "./services/kpiCalculatorExtended";
+import { 
+  calculateExtendedDashboardData,
+  calculateGeographicMetrics,
+  calculateProductProfitabilityMetrics,
+  calculatePhotoAnalysisData
+} from "./services/kpiCalculatorExtended";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -312,6 +317,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Extended dashboard data error:", error);
       res.status(500).json({ error: error.message || "Error calculating extended dashboard data" });
+    }
+  });
+
+  // Dashboard Geographic endpoint (NEW)
+  app.get("/api/dashboard-geographic/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
+      
+      const ventas = await storage.getVentasData(fileId);
+      if (ventas.length === 0) {
+        return res.status(404).json({ error: "File not found or no data available" });
+      }
+
+      // Build filters
+      const filters: any = {};
+      if (temporada) filters.temporada = temporada as string;
+      if (familia) filters.familia = familia as string;
+      if (tiendas) {
+        filters.tiendas = typeof tiendas === 'string' 
+          ? tiendas.split(',').map(t => t.trim())
+          : tiendas;
+      }
+      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
+      if (fechaFin) filters.fechaFin = fechaFin as string;
+
+      const geographicData = calculateGeographicMetrics(ventas, filters);
+      res.json(geographicData);
+    } catch (error: any) {
+      console.error("Dashboard geographic error:", error);
+      res.status(500).json({ error: error.message || "Error calculating geographic data" });
+    }
+  });
+
+  // Dashboard Products endpoint (NEW)
+  app.get("/api/dashboard-products/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
+      
+      const [ventas, productos] = await Promise.all([
+        storage.getVentasData(fileId),
+        storage.getProductosData(fileId),
+      ]);
+
+      if (ventas.length === 0) {
+        return res.status(404).json({ error: "File not found or no data available" });
+      }
+
+      // Build filters
+      const filters: any = {};
+      if (temporada) filters.temporada = temporada as string;
+      if (familia) filters.familia = familia as string;
+      if (tiendas) {
+        filters.tiendas = typeof tiendas === 'string' 
+          ? tiendas.split(',').map(t => t.trim())
+          : tiendas;
+      }
+      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
+      if (fechaFin) filters.fechaFin = fechaFin as string;
+
+      const productsData = calculateProductProfitabilityMetrics(ventas, productos, filters);
+      res.json(productsData);
+    } catch (error: any) {
+      console.error("Dashboard products error:", error);
+      res.status(500).json({ error: error.message || "Error calculating products data" });
+    }
+  });
+
+  // Dashboard Photos endpoint (NEW)
+  app.get("/api/dashboard-photos/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas, fechaInicio, fechaFin, familiaFilter } = req.query;
+      
+      const ventas = await storage.getVentasData(fileId);
+      if (ventas.length === 0) {
+        return res.status(404).json({ error: "File not found or no data available" });
+      }
+
+      // Build filters
+      const filters: any = {};
+      if (temporada) filters.temporada = temporada as string;
+      if (familia) filters.familia = familia as string;
+      if (tiendas) {
+        filters.tiendas = typeof tiendas === 'string' 
+          ? tiendas.split(',').map(t => t.trim())
+          : tiendas;
+      }
+      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
+      if (fechaFin) filters.fechaFin = fechaFin as string;
+
+      const photosData = calculatePhotoAnalysisData(
+        ventas, 
+        filters, 
+        familiaFilter as string | undefined
+      );
+      res.json(photosData);
+    } catch (error: any) {
+      console.error("Dashboard photos error:", error);
+      res.status(500).json({ error: error.message || "Error calculating photos data" });
     }
   });
 

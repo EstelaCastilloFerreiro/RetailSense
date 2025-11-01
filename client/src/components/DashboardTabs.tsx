@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
 import ExtendedOverview from "./ExtendedOverview";
 import GeographicSection from "./GeographicSection";
+import ProductProfitabilitySection from "./ProductProfitabilitySection";
+import PhotoAnalysisSection from "./PhotoAnalysisSection";
 
 export default function DashboardTabs() {
   return (
@@ -46,19 +47,11 @@ export default function DashboardTabs() {
       </TabsContent>
 
       <TabsContent value="products" className="mt-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-center h-64">
-            <p className="text-muted-foreground">Sección Producto, Campaña, Devoluciones y Rentabilidad - En desarrollo</p>
-          </div>
-        </Card>
+        <ProductProfitabilitySection />
       </TabsContent>
 
       <TabsContent value="photos" className="mt-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-center h-64">
-            <p className="text-muted-foreground">Sección Análisis con Fotos - En desarrollo</p>
-          </div>
-        </Card>
+        <PhotoAnalysisSection />
       </TabsContent>
     </Tabs>
   );

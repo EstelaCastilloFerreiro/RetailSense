@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useData } from "@/contexts/DataContext";
 import KPICard from "./KPICard";
@@ -7,15 +8,23 @@ import { Loader2 } from "lucide-react";
 export default function DashboardData() {
   const { fileId, filters } = useData();
 
-  const queryParams = new URLSearchParams();
-  if (filters.temporada) queryParams.set('temporada', filters.temporada);
-  if (filters.familia) queryParams.set('familia', filters.familia);
-  if (filters.tiendas && filters.tiendas.length > 0) {
-    queryParams.set('tiendas', filters.tiendas.join(','));
-  }
-
-  const queryString = queryParams.toString();
-  const apiUrl = `/api/dashboard/${fileId}${queryString ? `?${queryString}` : ''}`;
+  const stableFilters = useMemo(() => {
+    const cleaned: Record<string, any> = {};
+    
+    if (filters.temporada) cleaned.temporada = filters.temporada;
+    if (filters.familia) cleaned.familia = filters.familia;
+    if (filters.tiendas && filters.tiendas.length > 0) cleaned.tiendas = filters.tiendas;
+    if (filters.fechaInicio) cleaned.fechaInicio = filters.fechaInicio;
+    if (filters.fechaFin) cleaned.fechaFin = filters.fechaFin;
+    
+    return cleaned;
+  }, [
+    filters.temporada,
+    filters.familia,
+    filters.tiendas?.join(','),
+    filters.fechaInicio,
+    filters.fechaFin,
+  ]);
 
   const { data: dashboardData, isLoading, error } = useQuery<{
     kpis: {
@@ -47,7 +56,7 @@ export default function DashboardData() {
       beneficio: number;
     }>;
   }>({
-    queryKey: [apiUrl],
+    queryKey: ['/api/dashboard', fileId, stableFilters],
     enabled: !!fileId,
   });
 
