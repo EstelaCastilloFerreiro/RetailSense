@@ -197,6 +197,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Geographic data endpoint with filters
+  app.get("/api/geographic/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
+
+      const ventas = await storage.getVentasData(fileId);
+      if (!ventas || ventas.length === 0) {
+        return res.status(404).json({ error: "No sales data found" });
+      }
+
+      // Build filters
+      const filters: any = {};
+      if (temporada) filters.temporada = temporada as string;
+      if (familia) filters.familia = familia as string;
+      if (tiendas) {
+        filters.tiendas = typeof tiendas === 'string' 
+          ? tiendas.split(',').map(t => t.trim())
+          : tiendas;
+      }
+      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
+      if (fechaFin) filters.fechaFin = fechaFin as string;
+
+      const { applyFilters } = await import('./services/kpiCalculator');
+      const filteredVentas = applyFilters(ventas, filters);
+
+      // Calculate sales per store
+      const ventasPorTienda = Object.values(
+        filteredVentas.reduce((acc, venta) => {
+          if (!venta.tienda) return acc;
+          if (!acc[venta.tienda]) {
+            acc[venta.tienda] = { tienda: venta.tienda, cantidad: 0, beneficio: 0 };
+          }
+          acc[venta.tienda].cantidad += venta.cantidad || 0;
+          acc[venta.tienda].beneficio += venta.subtotal || 0;
+          return acc;
+        }, {} as Record<string, { tienda: string; cantidad: number; beneficio: number }>)
+      ).sort((a, b) => b.cantidad - a.cantidad);
+
+      const mejorTienda = ventasPorTienda[0] || { tienda: "N/A", cantidad: 0, beneficio: 0 };
+      const peorTienda = ventasPorTienda[ventasPorTienda.length - 1] || { tienda: "N/A", cantidad: 0, beneficio: 0 };
+
+      res.json({
+        ventasPorTienda,
+        mejorTienda: {
+          nombre: mejorTienda.tienda,
+          cantidad: mejorTienda.cantidad,
+          beneficio: mejorTienda.beneficio,
+        },
+        peorTienda: {
+          nombre: peorTienda.tienda,
+          cantidad: peorTienda.cantidad,
+          beneficio: peorTienda.beneficio,
+        },
+        totalTiendas: ventasPorTienda.length,
+      });
+    } catch (error: any) {
+      console.error("Geographic data error:", error);
+      res.status(500).json({ error: error.message || "Error fetching geographic data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
