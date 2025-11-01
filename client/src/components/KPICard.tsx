@@ -45,7 +45,7 @@ export default function KPICard({
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </p>
-        <p className="text-4xl font-bold font-mono" data-testid={`text-value-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+        <p className="text-2xl font-bold font-mono" data-testid={`text-value-${label.toLowerCase().replace(/\s+/g, "-")}`}>
           {formatValue(value)}
         </p>
         {change !== undefined && (
