@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import DashboardData from "./DashboardData";
+import ExtendedOverview from "./ExtendedOverview";
 import GeographicSection from "./GeographicSection";
 
 export default function DashboardTabs() {
@@ -38,7 +38,7 @@ export default function DashboardTabs() {
       </TabsList>
 
       <TabsContent value="overview" className="mt-6">
-        <DashboardData />
+        <ExtendedOverview />
       </TabsContent>
 
       <TabsContent value="geographic" className="mt-6">

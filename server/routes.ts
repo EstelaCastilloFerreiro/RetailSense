@@ -260,10 +260,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Extended dashboard data endpoint
+  // Extended dashboard data endpoint with filters
   app.get("/api/dashboard-extended/:fileId", async (req, res) => {
     try {
       const { fileId } = req.params;
+      const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
       
       const [ventas, productos, traspasos] = await Promise.all([
         storage.getVentasData(fileId),
@@ -275,7 +276,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "File not found or no data available" });
       }
 
-      const extendedData = calculateExtendedDashboardData(ventas, productos, traspasos);
+      // Build filters
+      const filters: any = {};
+      if (temporada) filters.temporada = temporada as string;
+      if (familia) filters.familia = familia as string;
+      if (tiendas) {
+        filters.tiendas = typeof tiendas === 'string' 
+          ? tiendas.split(',').map((t: string) => t.trim())
+          : Array.isArray(tiendas) ? tiendas : [];
+      }
+      if (fechaInicio) filters.fechaInicio = fechaInicio as string;
+      if (fechaFin) filters.fechaFin = fechaFin as string;
+
+      const extendedData = calculateExtendedDashboardData(ventas, productos, traspasos, filters);
       res.json(extendedData);
     } catch (error: any) {
       console.error("Extended dashboard data error:", error);

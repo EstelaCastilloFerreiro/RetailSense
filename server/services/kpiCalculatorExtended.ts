@@ -1,5 +1,14 @@
 // Extended KPI calculations for complete dashboard functionality
 import type { VentasData, ProductosData, TraspasosData } from "../../shared/schema";
+import { applyFilters, type FilterOptions } from "./kpiCalculator";
+
+interface FilterOptionsInternal {
+  temporada?: string;
+  familia?: string;
+  tiendas?: string[];
+  fechaInicio?: string;
+  fechaFin?: string;
+}
 
 export interface ExtendedDashboardData {
   // Alcance del análisis
@@ -77,11 +86,15 @@ const TIENDAS_ONLINE = [
 export function calculateExtendedDashboardData(
   ventas: VentasData[],
   productos: ProductosData[],
-  traspasos: TraspasosData[]
+  traspasos: TraspasosData[],
+  filters?: FilterOptionsInternal
 ): ExtendedDashboardData {
+  // Apply filters first if provided
+  const filteredVentas = filters ? applyFilters(ventas, filters as FilterOptions) : ventas;
+  
   // Filtrar ventas reales (sin GR.ART.FICTICIO)
-  const ventasReales = ventas.filter(v => v.descripcionFamilia !== 'GR.ART.FICTICIO');
-  const ventasFicticio = ventas.filter(v => v.descripcionFamilia === 'GR.ART.FICTICIO');
+  const ventasReales = filteredVentas.filter(v => v.descripcionFamilia !== 'GR.ART.FICTICIO');
+  const ventasFicticio = filteredVentas.filter(v => v.descripcionFamilia === 'GR.ART.FICTICIO');
   
   // Alcance del análisis
   const alcance = {
@@ -91,16 +104,14 @@ export function calculateExtendedDashboardData(
     totalTransacciones: ventas.length,
   };
   
-  // Calcular KPIs generales (sin ficticio)
+  // Calcular KPIs generales (sin ficticio) - separar ventas positivas de devoluciones
   const ventasPositivasReales = ventasReales
     .filter(v => (v.cantidad || 0) > 0)
-    .reduce((sum, v) => sum + (v.subtotal || 0), 0);
+    .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
-  const devolucionesReales = Math.abs(
-    ventasReales
-      .filter(v => (v.cantidad || 0) < 0)
-      .reduce((sum, v) => sum + (v.subtotal || 0), 0)
-  );
+  const devolucionesReales = ventasReales
+    .filter(v => (v.cantidad || 0) < 0)
+    .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
   const kpisGenerales = {
     ventasBrutas: ventasPositivasReales + devolucionesReales,
@@ -109,16 +120,14 @@ export function calculateExtendedDashboardData(
     tasaDevolucion: ventasPositivasReales > 0 ? (devolucionesReales / ventasPositivasReales) * 100 : 0,
   };
   
-  // Calcular KPIs ficticio
+  // Calcular KPIs ficticio - separar ventas positivas de devoluciones
   const ventasPositivasFicticio = ventasFicticio
     .filter(v => (v.cantidad || 0) > 0)
-    .reduce((sum, v) => sum + (v.subtotal || 0), 0);
+    .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
-  const devolucionesFicticio = Math.abs(
-    ventasFicticio
-      .filter(v => (v.cantidad || 0) < 0)
-      .reduce((sum, v) => sum + (v.subtotal || 0), 0)
-  );
+  const devolucionesFicticio = ventasFicticio
+    .filter(v => (v.cantidad || 0) < 0)
+    .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
   const kpisFicticio = {
     ventasBrutas: ventasPositivasFicticio + devolucionesFicticio,
@@ -139,11 +148,12 @@ export function calculateExtendedDashboardData(
     ventasOnline: ventasOnline.reduce((sum, v) => sum + (v.subtotal || 0), 0),
   };
   
-  // Ventas mensuales por tipo
+  // Ventas mensuales por tipo - solo contar ventas positivas
   const ventasMensualesMap = new Map<string, { fisica: { cantidad: number; beneficio: number }, online: { cantidad: number; beneficio: number } }>();
   
-  ventas.forEach(v => {
-    if (!v.mes || (v.cantidad || 0) === 0) return;
+  filteredVentas.forEach(v => {
+    // Solo contar ventas positivas para las gráficas mensuales
+    if (!v.mes || (v.cantidad || 0) <= 0) return;
     
     if (!ventasMensualesMap.has(v.mes)) {
       ventasMensualesMap.set(v.mes, {
@@ -180,9 +190,9 @@ export function calculateExtendedDashboardData(
     });
   });
   
-  // Ranking de tiendas
+  // Ranking de tiendas - solo ventas positivas
   const tiendasMap = new Map<string, { unidades: number; beneficio: number }>();
-  ventas.forEach(v => {
+  filteredVentas.forEach(v => {
     if (!v.tienda || (v.cantidad || 0) <= 0) return;
     
     if (!tiendasMap.has(v.tienda)) {
@@ -200,18 +210,23 @@ export function calculateExtendedDashboardData(
       unidades: data.unidades,
       beneficio: data.beneficio,
     }))
-    .sort((a, b) => b.beneficio - a.beneficio)
-    .map((item, index) => ({
-      ...item,
-      ranking: index + 1,
-    }));
+    .sort((a, b) => b.beneficio - a.beneficio);
   
-  const topTiendas = tiendas.slice(0, 30);
-  const bottomTiendas = tiendas.slice(-30).reverse();
+  // Top 30 con rankings correctos (1-30)
+  const topTiendas = tiendas.slice(0, 30).map((item, index) => ({
+    ...item,
+    ranking: index + 1,
+  }));
   
-  // Ventas por talla
+  // Bottom 30 con rankings correctos (1-30, siendo 1 el peor)
+  const bottomTiendas = tiendas.slice(-30).reverse().map((item, index) => ({
+    ...item,
+    ranking: index + 1,
+  }));
+  
+  // Ventas por talla - solo ventas positivas
   const tallasMap = new Map<string, number>();
-  ventas.forEach(v => {
+  filteredVentas.forEach(v => {
     if (!v.talla || (v.cantidad || 0) <= 0) return;
     tallasMap.set(v.talla, (tallasMap.get(v.talla) || 0) + (v.cantidad || 0));
   });
