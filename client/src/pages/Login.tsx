@@ -32,7 +32,7 @@ export default function Login() {
       setLocation("/upload");
       toast({
         title: "Acceso concedido",
-        description: `Bienvenido ${username}`,
+        description: `Bienvenido/a ${username}`,
       });
       setIsLoading(false);
     }, 800);

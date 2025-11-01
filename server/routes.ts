@@ -4,6 +4,7 @@ import multer from "multer";
 import { storage } from "./storage";
 import { processExcelFile, detectColumnStructure } from "./services/excelProcessor";
 import { calculateDashboardData } from "./services/kpiCalculator";
+import { calculateExtendedDashboardData } from "./services/kpiCalculatorExtended";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -256,6 +257,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Geographic data error:", error);
       res.status(500).json({ error: error.message || "Error fetching geographic data" });
+    }
+  });
+
+  // Extended dashboard data endpoint
+  app.get("/api/dashboard-extended/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      
+      const [ventas, productos, traspasos] = await Promise.all([
+        storage.getVentasData(fileId),
+        storage.getProductosData(fileId),
+        storage.getTraspasosData(fileId),
+      ]);
+
+      if (ventas.length === 0) {
+        return res.status(404).json({ error: "File not found or no data available" });
+      }
+
+      const extendedData = calculateExtendedDashboardData(ventas, productos, traspasos);
+      res.json(extendedData);
+    } catch (error: any) {
+      console.error("Extended dashboard data error:", error);
+      res.status(500).json({ error: error.message || "Error calculating extended dashboard data" });
     }
   });
 
