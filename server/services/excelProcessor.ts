@@ -2,44 +2,43 @@ import * as XLSX from 'xlsx';
 import type { VentasData, ProductosData, TraspasosData } from '@shared/schema';
 
 // Column mapping for Spanish Excel headers to our schema
+// Updated to match actual Excel file structure from TRUCCO data
 const COLUMN_MAPPINGS = {
   ventas: {
     'ACT': 'act',
-    'Código único': 'codigoUnico',
+    'Artículo': 'codigoUnico', // "Artículo" is the unique product code
     'Cantidad': 'cantidad',
     'P.V.P.': 'pvp',
     'Subtotal': 'subtotal',
-    'Fecha venta': 'fechaVenta',
-    'Tienda': 'tienda',
-    'Código Tienda': 'codigoTienda',
+    'Fecha Documento': 'fechaVenta', // "Fecha Documento" is the sale date
+    'NombreTPV': 'tienda', // "NombreTPV" is the store name
+    'TPV': 'codigoTienda', // "TPV" is the store code
     'Temporada': 'temporada',
     'Familia': 'familia',
     'Descripción Familia': 'descripcionFamilia',
     'Talla': 'talla',
-    'Color': 'color',
+    'Descripción Color': 'color', // Use "Descripción Color" for color
     'url_image': 'urlImage',
     'url_thumbnail': 'urlThumbnail',
     'Precio Coste': 'precioCoste',
   },
   productos: {
     'ACT': 'act',
-    'Código único': 'codigoUnico',
+    'Artículo': 'codigoUnico',
     'Cantidad Pedida': 'cantidadPedida',
     'P.V.P.': 'pvp',
     'Precio Coste': 'precioCoste',
-    'url_image': 'urlImage',
-    'Familia': 'familia',
     'Talla': 'talla',
-    'Color': 'color',
+    'Descripción Color': 'color',
     'Temporada': 'temporada',
+    'Familia': 'familia', // Note: Familia might not be in Compra sheet, but adding for compatibility
   },
   traspasos: {
     'ACT': 'act',
-    'Código único': 'codigoUnico',
+    'Artículo': 'codigoUnico',
     'Enviado': 'enviado',
-    'Tienda': 'tienda',
-    'Fecha enviado': 'fechaEnviado',
-    'url_image': 'urlImage',
+    'NombreTpvDestino': 'tienda', // Destination store name
+    'Fecha Documento': 'fechaEnviado',
   },
 };
 

@@ -47,7 +47,7 @@ export default function DashboardData() {
       beneficio: number;
     }>;
   }>({
-    queryKey: [apiUrl, fileId, filters],
+    queryKey: [apiUrl],
     enabled: !!fileId,
   });
 

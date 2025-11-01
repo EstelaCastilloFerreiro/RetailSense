@@ -29,11 +29,14 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
     tiendasNaelle: string[];
     tiendasItalia: string[];
   }>({
-    queryKey: [`/api/filters/${fileId}`, fileId],
+    queryKey: [`/api/filters/${fileId}`],
     enabled: !!fileId,
   });
 
-  const [selectedTiendas, setSelectedTiendas] = useState<string[]>([]);
+  // Local filter state (not applied until "Aplicar Filtros" is clicked)
+  const [localTemporada, setLocalTemporada] = useState<string | undefined>(filters.temporada);
+  const [localFamilia, setLocalFamilia] = useState<string | undefined>(filters.familia);
+  const [selectedTiendas, setSelectedTiendas] = useState<string[]>(filters.tiendas || []);
 
   const toggleSection = (label: string) => {
     setOpenSections((prev) =>
@@ -48,14 +51,17 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
   };
 
   const handleApply = () => {
-    if (selectedTiendas.length > 0) {
-      updateFilter('tiendas', selectedTiendas);
-    }
+    // Apply all local filters to global state
+    updateFilter('temporada', localTemporada);
+    updateFilter('familia', localFamilia);
+    updateFilter('tiendas', selectedTiendas.length > 0 ? selectedTiendas : undefined);
     onApplyFilters?.();
   };
 
   const handleReset = () => {
     clearFilters();
+    setLocalTemporada(undefined);
+    setLocalFamilia(undefined);
     setSelectedTiendas([]);
   };
 
@@ -90,8 +96,8 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
         <div className="space-y-2">
           <Label className="text-sm font-medium uppercase tracking-wide">Temporada</Label>
           <Select
-            value={filters.temporada || ""}
-            onValueChange={(value) => updateFilter('temporada', value === 'all' ? undefined : value)}
+            value={localTemporada || ""}
+            onValueChange={(value) => setLocalTemporada(value === 'all' ? undefined : value)}
           >
             <SelectTrigger data-testid="select-temporada">
               <SelectValue placeholder="Todas las temporadas" />
@@ -108,8 +114,8 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
         <div className="space-y-2">
           <Label className="text-sm font-medium uppercase tracking-wide">Familia</Label>
           <Select
-            value={filters.familia || ""}
-            onValueChange={(value) => updateFilter('familia', value === 'all' ? undefined : value)}
+            value={localFamilia || ""}
+            onValueChange={(value) => setLocalFamilia(value === 'all' ? undefined : value)}
           >
             <SelectTrigger data-testid="select-familia">
               <SelectValue placeholder="Todas las familias" />
