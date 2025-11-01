@@ -1,24 +1,23 @@
-import { useState } from "react";
-import { Upload, File, X } from "lucide-react";
+import { useState, useRef } from "react";
+import { Upload, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-
-interface UploadedFile {
-  name: string;
-  size: number;
-  sheets?: number;
-}
+import { useToast } from "@/hooks/use-toast";
+import { useData } from "@/contexts/DataContext";
 
 interface FileUploadProps {
   onUploadComplete?: () => void;
 }
 
 export default function FileUpload({ onUploadComplete }: FileUploadProps) {
-  const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; records: any } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const { setFileId, clearFilters } = useData();
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -33,52 +32,78 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
     e.preventDefault();
     setIsDragging(false);
     const droppedFiles = Array.from(e.dataTransfer.files);
-    processFiles(droppedFiles);
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files);
-      processFiles(selectedFiles);
+    if (droppedFiles.length > 0) {
+      handleFileUpload(droppedFiles[0]);
     }
   };
 
-  const processFiles = (fileList: File[]) => {
-    const newFiles: UploadedFile[] = fileList.map((file) => ({
-      name: file.name,
-      size: file.size,
-      sheets: Math.floor(Math.random() * 5) + 1,
-    }));
-    setFiles((prev) => [...prev, ...newFiles]);
-    simulateUpload();
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
   };
 
-  const simulateUpload = () => {
+  const handleFileUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('clientId', 'demo-client');
+
     setUploading(true);
-    setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploading(false);
-          setTimeout(() => {
-            onUploadComplete?.();
-          }, 500);
-          return 100;
-        }
-        return prev + 10;
+    setUploadProgress(0);
+
+    try {
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 200);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
       });
-    }, 200);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error uploading file');
+      }
+
+      const data = await response.json();
+      
+      setUploadedFile({
+        name: data.fileName,
+        records: data.recordCounts,
+      });
+
+      setFileId(data.fileId);
+      clearFilters();
+
+      toast({
+        title: "Archivo procesado correctamente",
+        description: `${data.recordCounts.ventas} ventas, ${data.recordCounts.productos} productos, ${data.recordCounts.traspasos} traspasos`,
+      });
+
+      onUploadComplete?.();
+
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Error al procesar archivo",
+        description: error.message || "Por favor, intenta de nuevo",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -94,71 +119,77 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         onDrop={handleDrop}
         data-testid="dropzone-upload"
       >
-        <Upload className="h-16 w-16 text-primary" />
+        <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+          {uploadedFile ? (
+            <CheckCircle2 className="h-8 w-8 text-primary" />
+          ) : uploading ? (
+            <AlertCircle className="h-8 w-8 text-primary animate-pulse" />
+          ) : (
+            <Upload className="h-8 w-8 text-primary" />
+          )}
+        </div>
+
         <div className="text-center space-y-2">
-          <p className="text-xl font-semibold">Drop Excel or CSV files here</p>
+          <p className="text-xl font-semibold">
+            {uploadedFile ? 'Archivo cargado' : 'Arrastra el archivo Excel aquí'}
+          </p>
           <p className="text-sm text-muted-foreground">
-            Supports multiple sheets • Max 50MB per file
+            {uploadedFile 
+              ? uploadedFile.name
+              : 'Archivo .xlsx con las hojas: Compra, Traspasos, Ventas • Max 50MB'
+            }
           </p>
         </div>
+
         <input
+          ref={fileInputRef}
           type="file"
-          multiple
           accept=".xlsx,.xls,.csv"
           onChange={handleFileInput}
           className="hidden"
-          id="file-upload"
           data-testid="input-file"
         />
-        <label htmlFor="file-upload">
-          <Button variant="outline" size="lg" asChild data-testid="button-browse">
-            <span>Browse Files</span>
-          </Button>
-        </label>
+        
+        <Button
+          onClick={triggerFileInput}
+          disabled={uploading}
+          size="lg"
+          variant="outline"
+          data-testid="button-browse"
+        >
+          <FileText className="mr-2 h-5 w-5" />
+          {uploadedFile ? 'Cargar otro archivo' : 'Seleccionar archivo'}
+        </Button>
       </div>
 
       {uploading && (
         <Card className="p-6">
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">Detecting structure...</span>
-              <span className="text-muted-foreground">{progress}%</span>
+              <span className="font-medium">Procesando archivo...</span>
+              <span className="text-muted-foreground">{uploadProgress}%</span>
             </div>
-            <Progress value={progress} />
+            <Progress value={uploadProgress} />
           </div>
         </Card>
       )}
 
-      {files.length > 0 && !uploading && (
+      {uploadedFile && !uploading && (
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Uploaded Files</h3>
+          <h3 className="text-lg font-semibold mb-4">Datos procesados</h3>
           <div className="space-y-3">
-            {files.map((file, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-md"
-                data-testid={`file-item-${index}`}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <File className="h-5 w-5 text-primary flex-shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium truncate">{file.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(file.size)} • {file.sheets} sheet
-                      {file.sheets !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeFile(index)}
-                  data-testid={`button-remove-${index}`}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+              <span className="text-muted-foreground">Ventas:</span>
+              <span className="font-medium">{uploadedFile.records.ventas.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+              <span className="text-muted-foreground">Productos:</span>
+              <span className="font-medium">{uploadedFile.records.productos.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+              <span className="text-muted-foreground">Traspasos:</span>
+              <span className="font-medium">{uploadedFile.records.traspasos.toLocaleString()}</span>
+            </div>
           </div>
         </Card>
       )}

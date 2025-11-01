@@ -1,58 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import KPICard from "./KPICard";
-import DemandChart from "./DemandChart";
-import PriceOptimizationChart from "./PriceOptimizationChart";
-import SalesRegionChart from "./SalesRegionChart";
-import TopProductsList from "./TopProductsList";
-import InventoryTable from "./InventoryTable";
-import CampaignComparison from "./CampaignComparison";
-import OTBMetrics from "./OTBMetrics";
+import DashboardData from "./DashboardData";
 
 export default function DashboardTabs() {
-  const kpiData = [
-    {
-      label: "Projected Demand",
-      value: 12450,
-      change: 12.5,
-      changeLabel: "vs last month",
-      trend: "up" as const,
-      format: "number" as const,
-    },
-    {
-      label: "Optimal Avg Price",
-      value: 84.99,
-      change: -2.3,
-      changeLabel: "recommended",
-      trend: "down" as const,
-      format: "currency" as const,
-    },
-    {
-      label: "Inventory Fill Rate",
-      value: 87,
-      change: 5.2,
-      trend: "up" as const,
-      format: "percentage" as const,
-    },
-    {
-      label: "Avg Margin",
-      value: 42.5,
-      change: 1.8,
-      trend: "up" as const,
-      format: "percentage" as const,
-    },
-  ];
-
-  const otbMetrics = [
-    { label: "Options", value: 245 },
-    { label: "Depth", value: "3.2" },
-    { label: "Units", value: 12450 },
-    { label: "Total PVP", value: "€184,500" },
-    { label: "Total Cost", value: "€106,050" },
-    { label: "Markdown", value: "18%" },
-  ];
-
   return (
     <Tabs defaultValue="overview" className="w-full">
       <TabsList className="w-full justify-start border-b rounded-none h-12 bg-transparent p-0">
@@ -61,46 +10,26 @@ export default function DashboardTabs() {
           className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
           data-testid="tab-overview"
         >
-          Overview
+          Resumen General
         </TabsTrigger>
         <TabsTrigger
           value="stores"
           className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
           data-testid="tab-stores"
         >
-          Stores / Geography
+          Geográfico y Tiendas
         </TabsTrigger>
         <TabsTrigger
           value="products"
           className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
           data-testid="tab-products"
         >
-          Products / Campaigns
-        </TabsTrigger>
-        <TabsTrigger
-          value="inventory"
-          className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
-          data-testid="tab-inventory"
-        >
-          Inventory vs Demand
+          Productos y Campañas
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="overview" className="mt-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {kpiData.map((kpi, index) => (
-            <KPICard key={index} {...kpi} />
-          ))}
-        </div>
-        
-        <OTBMetrics metrics={otbMetrics} />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <DemandChart />
-          <PriceOptimizationChart />
-        </div>
-        
-        <TopProductsList />
+      <TabsContent value="overview" className="mt-6">
+        <DashboardData />
       </TabsContent>
 
       <TabsContent value="stores" className="mt-6 space-y-6">

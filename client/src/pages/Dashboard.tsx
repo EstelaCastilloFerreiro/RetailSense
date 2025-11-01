@@ -8,15 +8,11 @@ import ThemeToggle from "@/components/ThemeToggle";
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const handleApplyFilters = (filters: Record<string, string[]>) => {
-    console.log("Applied filters:", filters);
-  };
-
   return (
     <div className="flex h-screen bg-background">
       {sidebarOpen && (
         <aside className="hidden md:block">
-          <FilterSidebar onApplyFilters={handleApplyFilters} />
+          <FilterSidebar />
         </aside>
       )}
 

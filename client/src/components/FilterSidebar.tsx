@@ -1,50 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
-
-interface FilterGroup {
-  label: string;
-  options: string[];
-}
+import { ChevronDown, Loader2 } from "lucide-react";
+import { useData } from "@/contexts/DataContext";
+import { useQuery } from "@tanstack/react-query";
 
 interface FilterSidebarProps {
-  onApplyFilters?: (filters: Record<string, string[]>) => void;
+  onApplyFilters?: () => void;
 }
 
 export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
-  const filterGroups: FilterGroup[] = [
-    {
-      label: "Store",
-      options: ["Madrid Central", "Barcelona Norte", "Valencia Sur", "Sevilla Este"],
-    },
-    {
-      label: "Season",
-      options: ["Spring 2024", "Summer 2024", "Fall 2024", "Winter 2024"],
-    },
-    {
-      label: "Family",
-      options: ["Apparel", "Footwear", "Accessories", "Home & Living"],
-    },
-    {
-      label: "Product",
-      options: ["T-Shirts", "Jeans", "Sneakers", "Bags", "Jackets"],
-    },
-  ];
+  const { fileId, filters, updateFilter, clearFilters } = useData();
+  const [openSections, setOpenSections] = useState<string[]>(["Temporada", "Familia", "Tiendas"]);
 
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>(
-    {}
-  );
-  const [openSections, setOpenSections] = useState<string[]>(
-    filterGroups.map((g) => g.label)
-  );
+  const { data: availableFilters, isLoading } = useQuery<{
+    temporadas: string[];
+    familias: string[];
+    tiendas: string[];
+    tiendasOnline: string[];
+    tiendasNaelle: string[];
+    tiendasItalia: string[];
+  }>({
+    queryKey: ["/api/filters", fileId],
+    enabled: !!fileId,
+  });
+
+  const [selectedTiendas, setSelectedTiendas] = useState<string[]>([]);
 
   const toggleSection = (label: string) => {
     setOpenSections((prev) =>
@@ -52,87 +41,131 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
     );
   };
 
-  const handleCheckboxChange = (group: string, option: string) => {
-    setSelectedFilters((prev) => {
-      const current = prev[group] || [];
-      const updated = current.includes(option)
-        ? current.filter((o) => o !== option)
-        : [...current, option];
-      return { ...prev, [group]: updated };
-    });
+  const handleTiendaToggle = (tienda: string) => {
+    setSelectedTiendas(prev =>
+      prev.includes(tienda) ? prev.filter(t => t !== tienda) : [...prev, tienda]
+    );
   };
 
   const handleApply = () => {
-    console.log("Filters applied:", selectedFilters);
-    onApplyFilters?.(selectedFilters);
+    if (selectedTiendas.length > 0) {
+      updateFilter('tiendas', selectedTiendas);
+    }
+    onApplyFilters?.();
   };
 
   const handleReset = () => {
-    setSelectedFilters({});
-    console.log("Filters reset");
+    clearFilters();
+    setSelectedTiendas([]);
   };
 
-  const getSelectedCount = (group: string) => {
-    return selectedFilters[group]?.length || 0;
-  };
+  if (!fileId) {
+    return (
+      <div className="w-64 h-full bg-sidebar border-r border-sidebar-border p-6 flex items-center justify-center">
+        <p className="text-sm text-muted-foreground text-center">
+          Sube un archivo para aplicar filtros
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="w-64 h-full bg-sidebar border-r border-sidebar-border p-6 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-64 h-full bg-sidebar border-r border-sidebar-border p-6 flex flex-col">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-sidebar-foreground">Filters</h2>
+        <h2 className="text-lg font-semibold text-sidebar-foreground">Filtros</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          Refine your data view
+          Refina tu vista de datos
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-4">
-        {filterGroups.map((group) => (
-          <Collapsible
-            key={group.label}
-            open={openSections.includes(group.label)}
-            onOpenChange={() => toggleSection(group.label)}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium uppercase tracking-wide">Temporada</Label>
+          <Select
+            value={filters.temporada || ""}
+            onValueChange={(value) => updateFilter('temporada', value === 'all' ? undefined : value)}
           >
-            <CollapsibleTrigger className="w-full" data-testid={`button-toggle-${group.label.toLowerCase()}`}>
-              <div className="flex items-center justify-between w-full py-2 hover-elevate rounded-md px-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium uppercase tracking-wide">
-                    {group.label}
-                  </span>
-                  {getSelectedCount(group.label) > 0 && (
-                    <span className="text-xs bg-primary text-primary-foreground rounded-full px-2 py-0.5">
-                      {getSelectedCount(group.label)}
-                    </span>
-                  )}
-                </div>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${
-                    openSections.includes(group.label) ? "rotate-180" : ""
-                  }`}
-                />
-              </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 space-y-2 pl-2">
-              {group.options.map((option) => (
-                <div key={option} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`${group.label}-${option}`}
-                    checked={selectedFilters[group.label]?.includes(option)}
-                    onCheckedChange={() =>
-                      handleCheckboxChange(group.label, option)
-                    }
-                    data-testid={`checkbox-${group.label.toLowerCase()}-${option.toLowerCase().replace(/\s+/g, "-")}`}
-                  />
-                  <Label
-                    htmlFor={`${group.label}-${option}`}
-                    className="text-sm cursor-pointer"
-                  >
-                    {option}
-                  </Label>
-                </div>
+            <SelectTrigger data-testid="select-temporada">
+              <SelectValue placeholder="Todas las temporadas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las temporadas</SelectItem>
+              {availableFilters?.temporadas.map((temp: string) => (
+                <SelectItem key={temp} value={temp}>{temp}</SelectItem>
               ))}
-            </CollapsibleContent>
-          </Collapsible>
-        ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium uppercase tracking-wide">Familia</Label>
+          <Select
+            value={filters.familia || ""}
+            onValueChange={(value) => updateFilter('familia', value === 'all' ? undefined : value)}
+          >
+            <SelectTrigger data-testid="select-familia">
+              <SelectValue placeholder="Todas las familias" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las familias</SelectItem>
+              <SelectItem value="Todas sin GR.ART.FICTICIO">Todas sin GR.ART.FICTICIO</SelectItem>
+              {availableFilters?.familias.map((fam: string) => (
+                <SelectItem key={fam} value={fam}>{fam}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Collapsible
+          open={openSections.includes("Tiendas")}
+          onOpenChange={() => toggleSection("Tiendas")}
+        >
+          <CollapsibleTrigger className="w-full" data-testid="button-toggle-tiendas">
+            <div className="flex items-center justify-between w-full py-2 hover-elevate rounded-md px-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium uppercase tracking-wide">
+                  Tiendas
+                </span>
+                {selectedTiendas.length > 0 && (
+                  <span className="text-xs bg-primary text-primary-foreground rounded-full px-2 py-0.5">
+                    {selectedTiendas.length}
+                  </span>
+                )}
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${
+                  openSections.includes("Tiendas") ? "rotate-180" : ""
+                }`}
+              />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2 pl-2 max-h-64 overflow-y-auto">
+            {availableFilters?.tiendas.slice(0, 20).map((tienda: string) => (
+              <div key={tienda} className="flex items-center gap-2">
+                <Checkbox
+                  id={`tienda-${tienda}`}
+                  checked={selectedTiendas.includes(tienda)}
+                  onCheckedChange={() => handleTiendaToggle(tienda)}
+                  data-testid={`checkbox-tienda-${tienda.toLowerCase().replace(/\s+/g, "-")}`}
+                />
+                <Label
+                  htmlFor={`tienda-${tienda}`}
+                  className="text-sm cursor-pointer"
+                >
+                  {tienda}
+                </Label>
+              </div>
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       <Separator className="my-4" />
@@ -143,7 +176,7 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
           onClick={handleApply}
           data-testid="button-apply-filters"
         >
-          Apply Filters
+          Aplicar Filtros
         </Button>
         <Button
           variant="outline"
@@ -151,7 +184,7 @@ export default function FilterSidebar({ onApplyFilters }: FilterSidebarProps) {
           onClick={handleReset}
           data-testid="button-reset-filters"
         >
-          Reset All
+          Resetear
         </Button>
       </div>
     </div>
