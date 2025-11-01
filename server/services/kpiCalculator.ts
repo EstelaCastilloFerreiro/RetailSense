@@ -36,12 +36,26 @@ export function applyFilters(ventas: VentasData[], filters: FilterOptions): Vent
     filtered = filtered.filter(v => v.tienda && filters.tiendas!.includes(v.tienda));
   }
 
-  if (filters.fechaInicio) {
-    filtered = filtered.filter(v => v.fechaVenta >= filters.fechaInicio!);
-  }
-
-  if (filters.fechaFin) {
-    filtered = filtered.filter(v => v.fechaVenta <= filters.fechaFin!);
+  // Filter by date range
+  if (filters.fechaInicio || filters.fechaFin) {
+    filtered = filtered.filter(v => {
+      if (!v.fechaVenta) return false;
+      const fechaVenta = new Date(v.fechaVenta);
+      
+      if (filters.fechaInicio) {
+        const fechaInicio = new Date(filters.fechaInicio);
+        if (fechaVenta < fechaInicio) return false;
+      }
+      
+      if (filters.fechaFin) {
+        const fechaFin = new Date(filters.fechaFin);
+        // Add 1 day to include the end date (end of day)
+        fechaFin.setDate(fechaFin.getDate() + 1);
+        if (fechaVenta >= fechaFin) return false;
+      }
+      
+      return true;
+    });
   }
 
   return filtered;

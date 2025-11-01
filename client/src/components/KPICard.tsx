@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { formatNumber, formatCurrency, formatPercentage } from "@/lib/utils";
 
 interface KPICardProps {
   label: string;
@@ -33,9 +34,9 @@ export default function KPICard({
 
   const formatValue = (val: string | number) => {
     if (typeof val === "string") return val;
-    if (format === "currency") return `€${val.toLocaleString()}`;
-    if (format === "percentage") return `${val}%`;
-    return val.toLocaleString();
+    if (format === "currency") return formatCurrency(val);
+    if (format === "percentage") return formatPercentage(val);
+    return formatNumber(val);
   };
 
   return (

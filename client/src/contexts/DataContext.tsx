@@ -9,6 +9,7 @@ interface DataContextType {
     tiendas?: string[];
     fechaInicio?: string;
     fechaFin?: string;
+    modoTienda?: string;
   };
   setFilters: (filters: DataContextType['filters']) => void;
   updateFilter: (key: string, value: any) => void;
