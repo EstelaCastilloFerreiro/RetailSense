@@ -136,8 +136,10 @@ export function processExcelFile(buffer: Buffer): {
   traspasos: TraspasosData[];
   sheets: string[];
 } {
+  console.log('Reading workbook...');
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheets = workbook.SheetNames;
+  console.log('Workbook read successfully, sheets:', sheets);
 
   let ventas: VentasData[] = [];
   let productos: ProductosData[] = [];
@@ -146,43 +148,52 @@ export function processExcelFile(buffer: Buffer): {
   // Process Ventas sheet
   const ventasSheetName = sheets.find(s => s.toLowerCase().includes('ventas')) || sheets[0];
   if (ventasSheetName) {
+    console.log(`Processing ventas sheet: ${ventasSheetName}...`);
     const ventasSheet = workbook.Sheets[ventasSheetName];
+    console.log('Converting ventas sheet to JSON...');
     const ventasRaw = XLSX.utils.sheet_to_json(ventasSheet, { defval: null });
+    console.log(`Ventas raw rows: ${ventasRaw.length}`);
     
     ventas = ventasRaw
-      .map((row: any) => {
-        const mapped = mapRow(row, COLUMN_MAPPINGS.ventas);
-        
-        // Clean and convert numeric fields
-        mapped.cantidad = cleanNumericValue(mapped.cantidad) || 0;
-        mapped.pvp = cleanNumericValue(mapped.pvp);
-        mapped.subtotal = cleanNumericValue(mapped.subtotal) || 0;
-        mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
-        
-        // Format date
-        if (mapped.fechaVenta) {
-          mapped.fechaVenta = formatDate(mapped.fechaVenta);
-        }
-        
-        // Add computed fields
-        if (mapped.fechaVenta) {
-          try {
-            const date = new Date(mapped.fechaVenta);
-            if (!isNaN(date.getTime())) {
-              mapped.mes = date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
-            }
-          } catch (error) {
-            console.error('Error computing mes:', error);
+      .map((row: any, index: number) => {
+        try {
+          const mapped = mapRow(row, COLUMN_MAPPINGS.ventas);
+          
+          // Clean and convert numeric fields
+          mapped.cantidad = cleanNumericValue(mapped.cantidad) || 0;
+          mapped.pvp = cleanNumericValue(mapped.pvp);
+          mapped.subtotal = cleanNumericValue(mapped.subtotal) || 0;
+          mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
+          
+          // Format date
+          if (mapped.fechaVenta) {
+            mapped.fechaVenta = formatDate(mapped.fechaVenta);
           }
+          
+          // Add computed fields
+          if (mapped.fechaVenta) {
+            try {
+              const date = new Date(mapped.fechaVenta);
+              if (!isNaN(date.getTime())) {
+                mapped.mes = date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+              }
+            } catch (error) {
+              // Silently ignore mes computation errors
+            }
+          }
+          
+          mapped.esOnline = mapped.tienda ? TIENDAS_ONLINE.includes(mapped.tienda) : false;
+          
+          return mapped as VentasData;
+        } catch (error) {
+          console.error(`Error processing ventas row ${index}:`, error);
+          return null;
         }
-        
-        mapped.esOnline = mapped.tienda ? TIENDAS_ONLINE.includes(mapped.tienda) : false;
-        
-        return mapped as VentasData;
       })
-      .filter((v: VentasData) => {
-        // Filter out empty rows and excluded stores
-        return v.cantidad !== 0 && 
+      .filter((v: VentasData | null): v is VentasData => {
+        // Filter out null rows (errors), empty rows and excluded stores
+        return v !== null &&
+               v.cantidad !== 0 && 
                v.tienda && 
                !TIENDAS_A_ELIMINAR.includes(v.tienda);
       });
@@ -195,17 +206,24 @@ export function processExcelFile(buffer: Buffer): {
     const productosRaw = XLSX.utils.sheet_to_json(productosSheet, { defval: null });
     
     productos = productosRaw
-      .map((row: any) => {
-        const mapped = mapRow(row, COLUMN_MAPPINGS.productos);
-        
-        // Clean and convert numeric fields
-        mapped.cantidadPedida = cleanNumericValue(mapped.cantidadPedida);
-        mapped.pvp = cleanNumericValue(mapped.pvp);
-        mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
-        
-        return mapped as ProductosData;
+      .map((row: any, index: number) => {
+        try {
+          const mapped = mapRow(row, COLUMN_MAPPINGS.productos);
+          
+          // Clean and convert numeric fields
+          mapped.cantidadPedida = cleanNumericValue(mapped.cantidadPedida);
+          mapped.pvp = cleanNumericValue(mapped.pvp);
+          mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
+          
+          return mapped as ProductosData;
+        } catch (error) {
+          console.error(`Error processing productos row ${index}:`, error);
+          return null;
+        }
       })
-      .filter((p: ProductosData) => p.codigoUnico && p.codigoUnico.trim() !== ''); // Filter rows without valid codigo unico
+      .filter((p: ProductosData | null): p is ProductosData => {
+        return p !== null && p.codigoUnico && p.codigoUnico.trim() !== '';
+      });
   }
 
   // Process Traspasos sheet
@@ -215,20 +233,27 @@ export function processExcelFile(buffer: Buffer): {
     const traspasosRaw = XLSX.utils.sheet_to_json(traspasosSheet, { defval: null });
     
     traspasos = traspasosRaw
-      .map((row: any) => {
-        const mapped = mapRow(row, COLUMN_MAPPINGS.traspasos);
-        
-        // Clean and convert numeric fields
-        mapped.enviado = cleanNumericValue(mapped.enviado);
-        
-        // Format date
-        if (mapped.fechaEnviado) {
-          mapped.fechaEnviado = formatDate(mapped.fechaEnviado);
+      .map((row: any, index: number) => {
+        try {
+          const mapped = mapRow(row, COLUMN_MAPPINGS.traspasos);
+          
+          // Clean and convert numeric fields
+          mapped.enviado = cleanNumericValue(mapped.enviado);
+          
+          // Format date
+          if (mapped.fechaEnviado) {
+            mapped.fechaEnviado = formatDate(mapped.fechaEnviado);
+          }
+          
+          return mapped as TraspasosData;
+        } catch (error) {
+          console.error(`Error processing traspasos row ${index}:`, error);
+          return null;
         }
-        
-        return mapped as TraspasosData;
       })
-      .filter((t: TraspasosData) => t.tienda && !TIENDAS_A_ELIMINAR.includes(t.tienda));
+      .filter((t: TraspasosData | null): t is TraspasosData => {
+        return t !== null && t.tienda && !TIENDAS_A_ELIMINAR.includes(t.tienda);
+      });
   }
 
   return { ventas, productos, traspasos, sheets };
