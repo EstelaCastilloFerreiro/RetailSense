@@ -9,6 +9,7 @@ import {
   Legend,
   Tooltip,
 } from "recharts";
+import { CHART_COLORS, getColorByIndex } from "@/lib/colors";
 
 export default function SalesRegionChart() {
   const data = [
@@ -18,12 +19,7 @@ export default function SalesRegionChart() {
     { name: "Sevilla", value: 15, sales: 61100 },
   ];
 
-  const COLORS = [
-    "hsl(var(--chart-1))",
-    "hsl(var(--chart-2))",
-    "hsl(var(--chart-3))",
-    "hsl(var(--chart-4))",
-  ];
+  const COLORS = data.map((_, index) => getColorByIndex(index));
 
   return (
     <Card className="p-6">
@@ -42,7 +38,7 @@ export default function SalesRegionChart() {
             labelLine={false}
             label={({ name, value }) => `${name}: ${value}%`}
             outerRadius={100}
-            fill="#8884d8"
+            fill={CHART_COLORS.primary}
             dataKey="value"
           >
             {data.map((entry, index) => (

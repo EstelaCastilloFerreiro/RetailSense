@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useData } from "@/contexts/DataContext";
 import VisualizationCard from "./VisualizationCard";
 import KPICard from "./KPICard";
+import SalesMap from "./SalesMap";
 import { Card } from "@/components/ui/card";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import {
@@ -16,8 +17,10 @@ import {
   Legend,
   LineChart,
   Line,
+  Cell,
 } from "recharts";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { CHART_COLORS, getColorByIndex, getValueColor } from "@/lib/colors";
 
 interface GeographicMetrics {
   kpisPorZona: Array<{
@@ -135,7 +138,7 @@ export default function GeographicSection() {
   }, [] as any[]);
 
   const zonas = Array.from(new Set(data.evolucionMensualPorZona.map(e => e.zona)));
-  const colors = ['#0088ff', '#00cc00', '#ff9900', '#dc2626', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const colors = zonas.map((_, index) => getColorByIndex(index));
 
   return (
     <div className="space-y-6">
@@ -188,7 +191,15 @@ export default function GeographicSection() {
                 formatter={(value: number) => formatCurrency(value)}
                 labelStyle={{ color: '#000' }}
               />
-              <Bar dataKey="beneficio" fill="#0088ff" name="Beneficio" />
+              <Bar dataKey="beneficio" name="Beneficio">
+                {data.ventasPorZona.map((entry, index) => {
+                  const max = Math.max(...data.ventasPorZona.map(v => v.beneficio));
+                  const min = Math.min(...data.ventasPorZona.map(v => v.beneficio));
+                  return (
+                    <Cell key={`cell-${index}`} fill={getValueColor(entry.beneficio, min, max)} />
+                  );
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </VisualizationCard>
@@ -201,7 +212,15 @@ export default function GeographicSection() {
               <XAxis dataKey="zona" angle={-45} textAnchor="end" height={100} />
               <YAxis />
               <Tooltip labelStyle={{ color: '#000' }} />
-              <Bar dataKey="numTiendas" fill="#00cc00" name="Tiendas" />
+              <Bar dataKey="numTiendas" name="Tiendas">
+                {data.tiendasPorZona.map((entry, index) => {
+                  const max = Math.max(...data.tiendasPorZona.map(t => t.numTiendas));
+                  const min = Math.min(...data.tiendasPorZona.map(t => t.numTiendas));
+                  return (
+                    <Cell key={`cell-${index}`} fill={getValueColor(entry.numTiendas, min, max)} />
+                  );
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </VisualizationCard>
@@ -233,34 +252,64 @@ export default function GeographicSection() {
 
       {/* Mapas - España e Italia */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Mapa/Tabla España */}
-        <VisualizationCard title="Ventas España (Top 15 Tiendas)" id="mapa-espana">
-          <div className="overflow-auto max-h-[400px]" data-testid="table-espana">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-background">
-                <tr className="border-b">
-                  <th className="text-left p-2 text-xs font-semibold">Tienda</th>
-                  <th className="text-right p-2 text-xs font-semibold">Cantidad</th>
-                  <th className="text-right p-2 text-xs font-semibold">Beneficio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.mapaEspana.slice(0, 15).map((tienda, index) => (
-                  <tr key={index} className="border-b hover-elevate" data-testid={`row-espana-${index}`}>
-                    <td className="p-2 text-xs">{tienda.tienda}</td>
-                    <td className="text-right p-2 font-mono text-xs">{formatNumber(tienda.cantidad)}</td>
-                    <td className="text-right p-2 font-mono text-xs">{formatCurrency(tienda.beneficio)}</td>
+        {/* Mapa España */}
+        <VisualizationCard title="Mapa de Ventas - España" id="mapa-espana">
+          <SalesMap
+            points={data.mapaEspana.map(p => ({
+              tienda: p.tienda,
+              lat: p.lat,
+              lon: p.lon,
+              cantidad: p.cantidad,
+              beneficio: p.beneficio,
+            }))}
+            center={[40.4168, -3.7038]} // Madrid coordinates
+            zoom={5}
+            title="España - Ventas por Tienda"
+            type="espana"
+          />
+          {/* Tabla resumen debajo del mapa */}
+          {data.mapaEspana.length > 0 && (
+            <div className="mt-4 overflow-auto max-h-[200px]">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b">
+                    <th className="text-left p-2 text-xs font-semibold">Tienda</th>
+                    <th className="text-right p-2 text-xs font-semibold">Cantidad</th>
+                    <th className="text-right p-2 text-xs font-semibold">Beneficio</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {data.mapaEspana.slice(0, 10).map((tienda, index) => (
+                    <tr key={index} className="border-b hover-elevate" data-testid={`row-espana-${index}`}>
+                      <td className="p-2 text-xs">{tienda.tienda}</td>
+                      <td className="text-right p-2 font-mono text-xs">{formatNumber(tienda.cantidad)}</td>
+                      <td className="text-right p-2 font-mono text-xs">{formatCurrency(tienda.beneficio)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </VisualizationCard>
 
-        {/* Tabla Italia */}
+        {/* Mapa Italia */}
         {data.mapaItalia.length > 0 ? (
-          <VisualizationCard title="Ventas Italia" id="mapa-italia">
-            <div className="overflow-auto max-h-[400px]" data-testid="table-italia">
+          <VisualizationCard title="Mapa de Ventas - Italia" id="mapa-italia">
+            <SalesMap
+              points={data.mapaItalia.map(p => ({
+                ciudad: p.ciudad,
+                lat: p.lat,
+                lon: p.lon,
+                cantidad: p.cantidad,
+                beneficio: p.beneficio,
+              }))}
+              center={[41.9028, 12.4964]} // Rome coordinates
+              zoom={5}
+              title="Italia - Ventas por Ciudad"
+              type="italia"
+            />
+            {/* Tabla resumen debajo del mapa */}
+            <div className="mt-4 overflow-auto max-h-[200px]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background">
                   <tr className="border-b">

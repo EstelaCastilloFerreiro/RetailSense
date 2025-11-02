@@ -145,7 +145,7 @@ export function processExcelFile(buffer: Buffer): {
   let productos: ProductosData[] = [];
   let traspasos: TraspasosData[] = [];
 
-  // Process Ventas sheet
+  // Process Ventas sheet - look for sheet containing "ventas" in name
   const ventasSheetName = sheets.find(s => s.toLowerCase().includes('ventas')) || sheets[0];
   if (ventasSheetName) {
     console.log(`Processing ventas sheet: ${ventasSheetName}...`);
@@ -154,10 +154,82 @@ export function processExcelFile(buffer: Buffer): {
     const ventasRaw = XLSX.utils.sheet_to_json(ventasSheet, { defval: null });
     console.log(`Ventas raw rows: ${ventasRaw.length}`);
     
+    // Log first row to see actual column names
+    let effectiveMapping = COLUMN_MAPPINGS.ventas;
+    if (ventasRaw.length > 0) {
+      const firstRow = ventasRaw[0] as any;
+      const actualColumns = Object.keys(firstRow);
+      console.log('Sample row columns:', actualColumns);
+      console.log('Sample row data (first 500 chars):', JSON.stringify(firstRow, null, 2).substring(0, 500));
+      
+      // Check if we have any matches - if not, try to auto-detect
+      const mappingMatches = Object.keys(effectiveMapping).filter(key => actualColumns.includes(key));
+      console.log(`Column mapping matches: ${mappingMatches.length} out of ${Object.keys(effectiveMapping).length}`);
+      console.log(`Matched columns: ${mappingMatches.join(', ')}`);
+      
+      if (mappingMatches.length < 3 && actualColumns.length > 0) {
+        console.log('Few column matches found, attempting auto-detection...');
+        // Try to find columns by common patterns
+        // Primero procesar columnas con "descripcion" para priorizar nombres sobre códigos
+        const autoMapping: Record<string, string> = {};
+        
+        // Primera pasada: procesar columnas de descripción primero
+        for (const col of actualColumns) {
+          const colLower = col.toLowerCase().trim();
+          if (colLower.includes('descripcion') && colLower.includes('familia')) {
+            autoMapping[col] = 'descripcionFamilia';
+          } else if (colLower.includes('descripcion') && colLower.includes('color')) {
+            autoMapping[col] = 'color';
+          }
+        }
+        
+        // Segunda pasada: procesar el resto de columnas
+        for (const col of actualColumns) {
+          const colLower = col.toLowerCase().trim();
+          if ((colLower.includes('artículo') || colLower.includes('articulo')) && !colLower.includes('modelo')) {
+            autoMapping[col] = 'codigoUnico';
+          } else if (colLower === 'cantidad' || (colLower.includes('cantidad') && !colLower.includes('pedida'))) {
+            autoMapping[col] = 'cantidad';
+          } else if (colLower.includes('p.v.p') || colLower === 'pvp' || colLower.includes('precio venta')) {
+            autoMapping[col] = 'pvp';
+          } else if (colLower === 'subtotal' || colLower.includes('subtotal')) {
+            autoMapping[col] = 'subtotal';
+          } else if ((colLower.includes('fecha') || colLower.includes('date')) && !colLower.includes('presupuesto') && !colLower.includes('tope') && !colLower.includes('entrada')) {
+            autoMapping[col] = 'fechaVenta';
+          } else if (colLower === 'nombretpv' || (colLower.includes('nombre') && colLower.includes('tpv'))) {
+            autoMapping[col] = 'tienda';
+          } else if (colLower === 'tpv' && !colLower.includes('origen') && !colLower.includes('destino')) {
+            autoMapping[col] = 'codigoTienda';
+          } else if (colLower === 'temporada' || colLower.includes('temporada')) {
+            autoMapping[col] = 'temporada';
+          } else if (colLower === 'familia' && !colLower.includes('descripcion')) {
+            // Solo mapear como 'familia' si no hay otra columna que sea descripcionFamilia
+            if (!Object.values(autoMapping).includes('descripcionFamilia')) {
+              autoMapping[col] = 'familia';
+            }
+          } else if (colLower === 'talla' || colLower.includes('talla')) {
+            autoMapping[col] = 'talla';
+          } else if (colLower === 'color' && !colLower.includes('descripcion') && !autoMapping[col]) {
+            autoMapping[col] = 'color';
+          } else if (colLower.includes('precio coste') || colLower.includes('precio coste') || colLower.includes('coste')) {
+            autoMapping[col] = 'precioCoste';
+          } else if (colLower.includes('url_image') || colLower === 'url_image') {
+            autoMapping[col] = 'urlImage';
+          } else if (colLower.includes('url_thumbnail') || colLower === 'url_thumbnail') {
+            autoMapping[col] = 'urlThumbnail';
+          }
+        }
+        if (Object.keys(autoMapping).length > 0) {
+          console.log('Auto-detected mappings:', autoMapping);
+          effectiveMapping = { ...effectiveMapping, ...autoMapping };
+        }
+      }
+    }
+    
     ventas = ventasRaw
       .map((row: any, index: number) => {
         try {
-          const mapped = mapRow(row, COLUMN_MAPPINGS.ventas);
+          const mapped = mapRow(row, effectiveMapping);
           
           // Clean and convert numeric fields
           mapped.cantidad = cleanNumericValue(mapped.cantidad) || 0;
@@ -192,11 +264,21 @@ export function processExcelFile(buffer: Buffer): {
       })
       .filter((v: VentasData | null): v is VentasData => {
         // Filter out null rows (errors), empty rows and excluded stores
-        return v !== null &&
-               v.cantidad !== 0 && 
-               v.tienda && 
-               !TIENDAS_A_ELIMINAR.includes(v.tienda);
+        // But be more lenient - only require tienda and some data
+        if (v === null) return false;
+        if (!v.tienda || v.tienda.trim() === '') {
+          if (v.cantidad > 0 || v.subtotal > 0) {
+            console.warn(`Row filtered: missing tienda but has data. cantidad=${v.cantidad}, subtotal=${v.subtotal}`);
+          }
+          return false;
+        }
+        if (TIENDAS_A_ELIMINAR.includes(v.tienda)) return false;
+        // Allow rows even if cantidad is 0, as long as there's a subtotal
+        if (v.cantidad === 0 && (!v.subtotal || v.subtotal === 0)) return false;
+        return true;
       });
+    
+    console.log(`Processed ${ventas.length} ventas records after filtering`);
   }
 
   // Process Productos/Compra sheet

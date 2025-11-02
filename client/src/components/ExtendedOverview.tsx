@@ -14,7 +14,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  Cell,
 } from "recharts";
+import { CHART_COLORS, getValueColor } from "@/lib/colors";
 
 interface ExtendedDashboardData {
   alcance: {
@@ -298,8 +300,8 @@ export default function ExtendedOverview() {
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
               />
               <Legend />
-              <Bar dataKey="fisica" name="Física" fill="hsl(var(--primary))" opacity={0.8} />
-              <Bar dataKey="online" name="Online" fill="hsl(var(--chart-1))" opacity={0.8} />
+              <Bar dataKey="fisica" name="Física" fill={CHART_COLORS.primary} opacity={0.8} />
+              <Bar dataKey="online" name="Online" fill={CHART_COLORS.accent} opacity={0.8} />
             </BarChart>
           </ResponsiveContainer>
         </VisualizationCard>
@@ -386,7 +388,16 @@ export default function ExtendedOverview() {
                 formatter={(value: number) => value.toLocaleString()}
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
               />
-              <Bar dataKey="cantidad" name="Unidades" fill="hsl(var(--primary))" opacity={0.8} />
+              <Bar dataKey="cantidad" name="Unidades">
+                {data.ventasPorTalla.slice(0, 20).map((entry, index) => {
+                  const values = data.ventasPorTalla.slice(0, 20).map(v => v.cantidad);
+                  const max = Math.max(...values);
+                  const min = Math.min(...values);
+                  return (
+                    <Cell key={`cell-${index}`} fill={getValueColor(entry.cantidad, min, max)} />
+                  );
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </VisualizationCard>

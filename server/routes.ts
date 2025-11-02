@@ -56,6 +56,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         traspasos: traspasos.length,
       });
 
+      // Warn if no data was extracted
+      if (ventas.length === 0 && productos.length === 0 && traspasos.length === 0) {
+        console.warn('WARNING: No data was extracted from the Excel file. This might be due to:');
+        console.warn('1. Column names not matching expected format');
+        console.warn('2. Sheet names not matching expected patterns (ventas, compra, traspasos)');
+        console.warn('3. All rows being filtered out');
+      }
+
       // Save uploaded file metadata
       const uploadedFile = await storage.saveUploadedFile({
         clientId,
@@ -121,8 +129,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getTraspasosData(fileId),
       ]);
 
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build filters
@@ -153,8 +172,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fileId } = req.params;
       const ventas = await storage.getVentasData(fileId);
 
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       const temporadas = Array.from(new Set(ventas.map(v => v.temporada).filter(Boolean))).sort();
@@ -223,9 +253,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fileId } = req.params;
       const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
 
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       const ventas = await storage.getVentasData(fileId);
       if (!ventas || ventas.length === 0) {
-        return res.status(404).json({ error: "No sales data found" });
+        return res.status(404).json({ 
+          error: "No sales data found",
+          message: "The file was uploaded but no sales data could be extracted.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build filters
@@ -291,8 +331,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getTraspasosData(fileId),
       ]);
 
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build and normalize filters
@@ -341,8 +392,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { temporada, familia, tiendas, fechaInicio, fechaFin } = req.query;
       
       const ventas = await storage.getVentasData(fileId);
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build filters
@@ -376,8 +438,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getProductosData(fileId),
       ]);
 
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build filters
@@ -407,8 +480,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { temporada, familia, tiendas, fechaInicio, fechaFin, familiaFilter } = req.query;
       
       const ventas = await storage.getVentasData(fileId);
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
       if (ventas.length === 0) {
-        return res.status(404).json({ error: "File not found or no data available" });
+        return res.status(404).json({ 
+          error: "No data available", 
+          message: "The file was uploaded but no sales data could be extracted. This might be due to column name mismatches or all rows being filtered out.",
+          fileId,
+          fileName: uploadedFile.fileName
+        });
       }
 
       // Build filters

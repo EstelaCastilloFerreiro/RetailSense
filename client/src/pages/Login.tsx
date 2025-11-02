@@ -42,10 +42,11 @@ export default function Login() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/5 via-background to-primary/10">
       <header className="p-6 flex items-center justify-between border-b bg-background/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-white font-bold text-xl">K</span>
-          </div>
-          <span className="text-2xl font-bold text-primary tracking-tight">KLOB</span>
+          <img 
+            src="/klob-logo.svg" 
+            alt="KLOB Logo" 
+            className="h-12 w-auto"
+          />
         </div>
       </header>
 

@@ -5,7 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatNumber(value: number): string {
+export function formatNumber(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0';
+  }
+  
   const absValue = Math.abs(value);
   
   if (absValue >= 1_000_000) {
@@ -24,7 +28,11 @@ export function formatNumber(value: number): string {
   });
 }
 
-export function formatCurrency(value: number): string {
+export function formatCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '€0.00';
+  }
+  
   const absValue = Math.abs(value);
   
   if (absValue >= 1_000_000) {
@@ -43,6 +51,9 @@ export function formatCurrency(value: number): string {
   });
 }
 
-export function formatPercentage(value: number, decimals: number = 1): string {
+export function formatPercentage(value: number | null | undefined, decimals: number = 1): string {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0.0%';
+  }
   return value.toFixed(decimals) + '%';
 }

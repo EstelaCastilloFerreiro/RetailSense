@@ -684,11 +684,38 @@ export interface ProductProfitabilityMetrics {
     talla: string;
     cantidad: number;
   }>;
+  tallasPorFamiliaDetallado: Array<{
+    familia: string;
+    masDevueltas: Array<{ talla: string; cantidad: number }>;
+    menosDevueltas: Array<{ talla: string; cantidad: number }>;
+  }>;
+  ventasPorTemporada: Array<{
+    temporada: string;
+    enTemporada: number;
+    fueraTemporada: number;
+    total: number;
+    porcentajeEnTemporada: number;
+    porcentajeFueraTemporada: number;
+  }>;
   productosMargenNegativo: Array<{
     codigoUnico: string;
     familia: string;
+    temporada: string;
+    fechaVenta: string;
+    precioVenta: number;
+    precioCoste: number;
     margenUnitario: number;
     margenPorcentaje: number;
+  }>;
+  productosBajoMargen: Array<{
+    codigoUnico: string;
+    familia: string;
+    temporada: string;
+    fechaVenta: string;
+    precioVenta: number;
+    precioCoste: number;
+    margenPorcentaje: number;
+    cantidad: number;
   }>;
 }
 
@@ -776,11 +803,15 @@ export function calculateProductProfitabilityMetrics(
     }
   });
   
-  // Familia más devuelta
+  // Familia más devuelta - usar descripcionFamilia (nombre) en lugar de familia (código)
+  // Excluir GR.ART.FICTICIO del cálculo
   const familiaDevolucionesMap = new Map<string, number>();
   devoluciones.forEach(v => {
-    if (!v.familia) return;
-    familiaDevolucionesMap.set(v.familia, (familiaDevolucionesMap.get(v.familia) || 0) + Math.abs(v.cantidad || 0));
+    const familiaNombre = (v.descripcionFamilia || v.familia || 'Sin Familia').trim();
+    // Excluir GR.ART.FICTICIO
+    if (familiaNombre !== 'GR.ART.FICTICIO') {
+      familiaDevolucionesMap.set(familiaNombre, (familiaDevolucionesMap.get(familiaNombre) || 0) + Math.abs(v.cantidad || 0));
+    }
   });
   
   let familiaMasDevuelta = 'N/A';
@@ -836,36 +867,56 @@ export function calculateProductProfitabilityMetrics(
   const margenPorcentualPromedio = countMargen > 0 ? sumaMargenPorcentual / countMargen : 0;
   
   // Ventas vs Devoluciones por Familia
+  // Usar descripcionFamilia (nombre) en lugar de familia (código)
+  // Usar cantidad (unidades) en lugar de subtotal (beneficio) para coincidir con Streamlit
   const familiaVentasMap = new Map<string, { ventas: number; devoluciones: number }>();
   
   ventasPositivas.forEach(v => {
-    if (!v.familia) return;
-    if (!familiaVentasMap.has(v.familia)) {
-      familiaVentasMap.set(v.familia, { ventas: 0, devoluciones: 0 });
+    const familiaNombre = v.descripcionFamilia || v.familia || 'Sin Familia';
+    if (!familiaVentasMap.has(familiaNombre)) {
+      familiaVentasMap.set(familiaNombre, { ventas: 0, devoluciones: 0 });
     }
-    familiaVentasMap.get(v.familia)!.ventas += v.subtotal || 0;
+    // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
+    familiaVentasMap.get(familiaNombre)!.ventas += Math.abs(v.cantidad || 0);
   });
   
   devoluciones.forEach(v => {
-    if (!v.familia) return;
-    if (!familiaVentasMap.has(v.familia)) {
-      familiaVentasMap.set(v.familia, { ventas: 0, devoluciones: 0 });
+    const familiaNombre = v.descripcionFamilia || v.familia || 'Sin Familia';
+    if (!familiaVentasMap.has(familiaNombre)) {
+      familiaVentasMap.set(familiaNombre, { ventas: 0, devoluciones: 0 });
     }
-    familiaVentasMap.get(v.familia)!.devoluciones += Math.abs(v.subtotal || 0);
+    // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
+    familiaVentasMap.get(familiaNombre)!.devoluciones += Math.abs(v.cantidad || 0);
   });
   
   const ventasVsDevolucionesPorFamilia = Array.from(familiaVentasMap.entries())
     .map(([familia, data]) => ({ familia, ...data }))
     .sort((a, b) => b.ventas - a.ventas);
   
-  // Tallas por Familia
+  // Tallas por Familia - usar descripcionFamilia (nombre) en lugar de familia (código)
+  // Primero crear un mapa de códigos de familia a nombres
+  const familiaCodigoANombre = new Map<string, string>();
+  ventasPositivas.forEach(v => {
+    if (v.familia && v.descripcionFamilia) {
+      familiaCodigoANombre.set(v.familia, v.descripcionFamilia);
+    }
+  });
+  
   const tallasFamiliaMap = new Map<string, Map<string, number>>();
   ventasPositivas.forEach(v => {
-    if (!v.familia || !v.talla) return;
-    if (!tallasFamiliaMap.has(v.familia)) {
-      tallasFamiliaMap.set(v.familia, new Map());
+    // Priorizar descripcionFamilia (nombre) sobre familia (código)
+    // Si no hay descripcionFamilia pero hay código, buscar el nombre en el mapa
+    let familiaNombre = v.descripcionFamilia;
+    if (!familiaNombre && v.familia) {
+      familiaNombre = familiaCodigoANombre.get(v.familia) || v.familia;
     }
-    const tallasMap = tallasFamiliaMap.get(v.familia)!;
+    familiaNombre = familiaNombre || 'Sin Familia';
+    
+    if (!v.talla) return;
+    if (!tallasFamiliaMap.has(familiaNombre)) {
+      tallasFamiliaMap.set(familiaNombre, new Map());
+    }
+    const tallasMap = tallasFamiliaMap.get(familiaNombre)!;
     tallasMap.set(v.talla, (tallasMap.get(v.talla) || 0) + (v.cantidad || 0));
   });
   
@@ -876,29 +927,138 @@ export function calculateProductProfitabilityMetrics(
     });
   });
   
-  // Productos con margen negativo
-  const productosMargenNegativo: Array<any> = [];
-  const productosMap2 = new Map<string, { margenUnitario: number; margenPorcentaje: number; familia: string }>();
+  // Productos con margen negativo - usar descripcionFamilia (nombre) en lugar de familia (código)
+  const productosMargenNegativo: Array<{
+    codigoUnico: string;
+    familia: string;
+    temporada: string;
+    fechaVenta: string;
+    precioVenta: number;
+    precioCoste: number;
+    margenUnitario: number;
+    margenPorcentaje: number;
+  }> = [];
   
   ventasConMargen.forEach(v => {
-    if (!v.codigoUnico) return;
+    if (!v.codigoUnico || !v.fechaVenta) return;
     const precioRealUnitario = (v.subtotal || 0) / (v.cantidad || 1);
     const margenUnitario = precioRealUnitario - (v.precioCoste || 0);
     const margenPorcentaje = precioRealUnitario > 0 ? (margenUnitario / precioRealUnitario) * 100 : 0;
     
     if (margenUnitario < 0) {
-      if (!productosMap2.has(v.codigoUnico)) {
-        productosMap2.set(v.codigoUnico, {
-          margenUnitario,
-          margenPorcentaje,
-          familia: v.familia || 'N/A',
-        });
-      }
+      const familiaNombre = v.descripcionFamilia || v.familia || 'N/A';
+      productosMargenNegativo.push({
+        codigoUnico: v.codigoUnico,
+        familia: familiaNombre,
+        temporada: v.temporada || 'N/A',
+        fechaVenta: v.fechaVenta,
+        precioVenta: precioRealUnitario,
+        precioCoste: v.precioCoste || 0,
+        margenUnitario,
+        margenPorcentaje,
+      });
     }
   });
   
-  productosMap2.forEach((data, codigoUnico) => {
-    productosMargenNegativo.push({ codigoUnico, ...data });
+  // Análisis detallado de tallas por familia (top 3 más/menos devueltas)
+  const tallasPorFamiliaDetallado: Array<{
+    familia: string;
+    masDevueltas: Array<{ talla: string; cantidad: number }>;
+    menosDevueltas: Array<{ talla: string; cantidad: number }>;
+  }> = [];
+  
+  const tallasPorFamiliaDevolucionesMap = new Map<string, Map<string, number>>();
+  devoluciones.forEach(v => {
+    const familiaNombre = v.descripcionFamilia || v.familia || 'Sin Familia';
+    if (!familiaNombre || !v.talla) return;
+    if (!tallasPorFamiliaDevolucionesMap.has(familiaNombre)) {
+      tallasPorFamiliaDevolucionesMap.set(familiaNombre, new Map());
+    }
+    const tallasMap = tallasPorFamiliaDevolucionesMap.get(familiaNombre)!;
+    tallasMap.set(v.talla, (tallasMap.get(v.talla) || 0) + Math.abs(v.cantidad || 0));
+  });
+  
+  tallasPorFamiliaDevolucionesMap.forEach((tallasMap, familia) => {
+    const tallasArray = Array.from(tallasMap.entries())
+      .map(([talla, cantidad]) => ({ talla, cantidad }))
+      .sort((a, b) => b.cantidad - a.cantidad);
+    
+    const masDevueltas = tallasArray.slice(0, 3);
+    const menosDevueltas = tallasArray.slice(-3).reverse();
+    
+    tallasPorFamiliaDetallado.push({
+      familia,
+      masDevueltas,
+      menosDevueltas,
+    });
+  });
+  
+  // Ventas en/fuera de temporada por campaña
+  const ventasPorTemporadaMap = new Map<string, { enTemporada: number; fueraTemporada: number }>();
+  
+  ventasPositivas.forEach(v => {
+    if (!v.temporada || !v.fechaVenta) return;
+    const temporadaActual = getTemporadaActual(v.fechaVenta);
+    const fueraTemporada = v.temporada !== temporadaActual;
+    
+    if (!ventasPorTemporadaMap.has(v.temporada)) {
+      ventasPorTemporadaMap.set(v.temporada, { enTemporada: 0, fueraTemporada: 0 });
+    }
+    
+    const data = ventasPorTemporadaMap.get(v.temporada)!;
+    if (fueraTemporada) {
+      data.fueraTemporada += Math.abs(v.cantidad || 0);
+    } else {
+      data.enTemporada += Math.abs(v.cantidad || 0);
+    }
+  });
+  
+  const ventasPorTemporada = Array.from(ventasPorTemporadaMap.entries())
+    .map(([temporada, data]) => {
+      const enTemporada = data.enTemporada || 0;
+      const fueraTemporada = data.fueraTemporada || 0;
+      const total = enTemporada + fueraTemporada;
+      return {
+        temporada: temporada || 'N/A',
+        enTemporada,
+        fueraTemporada,
+        total,
+        porcentajeEnTemporada: total > 0 ? (enTemporada / total) * 100 : 0,
+        porcentajeFueraTemporada: total > 0 ? (fueraTemporada / total) * 100 : 0,
+      };
+    })
+    .sort((a, b) => a.temporada.localeCompare(b.temporada));
+  
+  // Productos con bajo margen (se filtrará por umbral en el frontend)
+  const productosBajoMargen: Array<{
+    codigoUnico: string;
+    familia: string;
+    temporada: string;
+    fechaVenta: string;
+    precioVenta: number;
+    precioCoste: number;
+    margenPorcentaje: number;
+    cantidad: number;
+  }> = [];
+  
+  ventasConMargen.forEach(v => {
+    if (!v.codigoUnico || !v.fechaVenta) return;
+    const precioRealUnitario = (v.subtotal || 0) / (v.cantidad || 1);
+    const margenUnitario = precioRealUnitario - (v.precioCoste || 0);
+    const margenPorcentaje = precioRealUnitario > 0 ? (margenUnitario / precioRealUnitario) * 100 : 0;
+    
+    const familiaNombre = v.descripcionFamilia || v.familia || 'N/A';
+    
+    productosBajoMargen.push({
+      codigoUnico: v.codigoUnico,
+      familia: familiaNombre,
+      temporada: v.temporada || 'N/A',
+      fechaVenta: v.fechaVenta,
+      precioVenta: precioRealUnitario,
+      precioCoste: v.precioCoste || 0,
+      margenPorcentaje,
+      cantidad: v.cantidad || 0,
+    });
   });
   
   return {
@@ -922,7 +1082,10 @@ export function calculateProductProfitabilityMetrics(
     },
     ventasVsDevolucionesPorFamilia,
     tallasPorFamilia,
+    tallasPorFamiliaDetallado,
+    ventasPorTemporada,
     productosMargenNegativo,
+    productosBajoMargen,
   };
 }
 

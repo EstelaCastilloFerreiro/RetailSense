@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { CHART_COLORS } from "@/lib/colors";
 
 export default function PriceOptimizationChart() {
   const data = [
@@ -52,15 +53,15 @@ export default function PriceOptimizationChart() {
             formatter={(value: number) => `€${value.toFixed(2)}`}
           />
           <Legend />
-          <Bar dataKey="current" fill="hsl(var(--muted))" name="Current Price" />
+          <Bar dataKey="current" fill={CHART_COLORS.secondary} name="Current Price" />
           <Bar dataKey="optimal" name="Optimal Price">
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={
                   entry.change > 0
-                    ? "hsl(142 76% 36%)"
-                    : "hsl(0 72% 51%)"
+                    ? CHART_COLORS.success
+                    : CHART_COLORS.danger
                 }
               />
             ))}

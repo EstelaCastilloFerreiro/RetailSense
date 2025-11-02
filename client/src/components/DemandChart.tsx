@@ -13,6 +13,7 @@ import {
   Area,
   ComposedChart,
 } from "recharts";
+import { CHART_COLORS } from "@/lib/colors";
 
 export default function DemandChart() {
   const data = [
@@ -62,7 +63,7 @@ export default function DemandChart() {
             dataKey="upper"
             stackId="1"
             stroke="none"
-            fill="hsl(var(--primary))"
+            fill={CHART_COLORS.primary}
             fillOpacity={0.1}
             name="Upper Bound"
           />
@@ -71,25 +72,25 @@ export default function DemandChart() {
             dataKey="lower"
             stackId="1"
             stroke="none"
-            fill="hsl(var(--background))"
+            fill={CHART_COLORS.secondary}
             fillOpacity={1}
             name="Lower Bound"
           />
           <Line
             type="monotone"
             dataKey="historical"
-            stroke="hsl(var(--primary))"
+            stroke={CHART_COLORS.primary}
             strokeWidth={2}
-            dot={{ fill: "hsl(var(--primary))" }}
+            dot={{ fill: CHART_COLORS.primary }}
             name="Historical"
           />
           <Line
             type="monotone"
             dataKey="projected"
-            stroke="hsl(var(--primary))"
+            stroke={CHART_COLORS.primary}
             strokeWidth={2}
             strokeDasharray="5 5"
-            dot={{ fill: "hsl(var(--primary))" }}
+            dot={{ fill: CHART_COLORS.primary }}
             name="Projected"
           />
         </ComposedChart>

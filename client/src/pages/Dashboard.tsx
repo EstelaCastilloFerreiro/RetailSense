@@ -28,10 +28,12 @@ export default function Dashboard() {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <div>
-              <h1 className="text-xl font-bold text-primary">KLOB</h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">Retail Analytics</p>
-            </div>
+            <img 
+              src="/klob-logo.svg" 
+              alt="KLOB Logo" 
+              className="h-10 w-auto"
+            />
+            <p className="text-xs text-muted-foreground hidden sm:block">Retail Analytics</p>
           </div>
           
           <div className="flex items-center gap-2">
