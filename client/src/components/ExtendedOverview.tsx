@@ -65,6 +65,20 @@ interface ExtendedDashboardData {
     talla: string;
     cantidad: number;
   }>;
+  kpisRotacion?: {
+    tiendaMayorRotacion: string;
+    tiendaMayorRotacionDias: number;
+    tiendaMenorRotacion: string;
+    tiendaMenorRotacionDias: number;
+    productoMayorRotacion: string;
+    productoMayorRotacionDias: number;
+    productoMenorRotacion: string;
+    productoMenorRotacionDias: number;
+    promedioGlobal: number;
+    medianaGlobal: number;
+    desviacionEstandar: number;
+    totalProductos: number;
+  };
 }
 
 export default function ExtendedOverview() {
@@ -252,7 +266,7 @@ export default function ExtendedOverview() {
 
       {/* KPIs por Tipo de Tienda */}
       <VisualizationCard 
-        title="KPIs por Tipo de Tienda"
+        title="KPIs por Tipo de Tienda (Excluyendo GR.ART.FICTICIO)"
         id="kpis-tienda"
       >
         <div className="grid grid-cols-2 gap-3">
@@ -263,7 +277,7 @@ export default function ExtendedOverview() {
             </p>
           </div>
           <div className="text-center p-3 border rounded-md bg-card">
-            <p className="text-xs text-muted-foreground mb-1">Ventas Físicas</p>
+            <p className="text-xs text-muted-foreground mb-1">Ventas Netas Físicas</p>
             <p className="text-lg font-bold font-mono" data-testid="text-ventas-fisicas">
               {data.kpisTienda.ventasFisicas.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}€
             </p>
@@ -275,7 +289,7 @@ export default function ExtendedOverview() {
             </p>
           </div>
           <div className="text-center p-3 border rounded-md bg-card">
-            <p className="text-xs text-muted-foreground mb-1">Ventas Online</p>
+            <p className="text-xs text-muted-foreground mb-1">Ventas Netas Online</p>
             <p className="text-lg font-bold font-mono" data-testid="text-ventas-online">
               {data.kpisTienda.ventasOnline.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}€
             </p>
@@ -369,6 +383,70 @@ export default function ExtendedOverview() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* KPIs de Rotación de Stock */}
+      {data.kpisRotacion ? (
+        <VisualizationCard 
+          title="KPIs de Rotación de Stock"
+          id="kpis-rotacion"
+          className="xl:col-span-3"
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="text-center p-3 border rounded-md bg-card">
+              <p className="text-xs text-muted-foreground mb-1">Tienda Mayor Rotación</p>
+              <p className="text-lg font-bold font-mono">{data.kpisRotacion.tiendaMayorRotacion}</p>
+              <p className="text-xs text-green-600 dark:text-green-400">{data.kpisRotacion.tiendaMayorRotacionDias.toFixed(1)} días mediana</p>
+            </div>
+            <div className="text-center p-3 border rounded-md bg-card">
+              <p className="text-xs text-muted-foreground mb-1">Tienda Menor Rotación</p>
+              <p className="text-lg font-bold font-mono">{data.kpisRotacion.tiendaMenorRotacion}</p>
+              <p className="text-xs text-destructive">{data.kpisRotacion.tiendaMenorRotacionDias.toFixed(1)} días mediana</p>
+            </div>
+            <div className="text-center p-3 border rounded-md bg-card">
+              <p className="text-xs text-muted-foreground mb-1">Producto Mayor Rotación</p>
+              <p className="text-lg font-bold font-mono">{data.kpisRotacion.productoMayorRotacion}</p>
+              <p className="text-xs text-green-600 dark:text-green-400">{data.kpisRotacion.productoMayorRotacionDias.toFixed(1)} días mediana</p>
+            </div>
+            <div className="text-center p-3 border rounded-md bg-card">
+              <p className="text-xs text-muted-foreground mb-1">Producto Menor Rotación</p>
+              <p className="text-lg font-bold font-mono">{data.kpisRotacion.productoMenorRotacion}</p>
+              <p className="text-xs text-destructive">{data.kpisRotacion.productoMenorRotacionDias.toFixed(1)} días mediana</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t">
+            <div className="text-center p-2 border rounded-md bg-muted/50">
+              <p className="text-xs text-muted-foreground mb-1">Promedio Global</p>
+              <p className="text-base font-bold font-mono">{data.kpisRotacion.promedioGlobal.toFixed(1)} días</p>
+            </div>
+            <div className="text-center p-2 border rounded-md bg-muted/50">
+              <p className="text-xs text-muted-foreground mb-1">Mediana Global</p>
+              <p className="text-base font-bold font-mono">{data.kpisRotacion.medianaGlobal.toFixed(1)} días</p>
+            </div>
+            <div className="text-center p-2 border rounded-md bg-muted/50">
+              <p className="text-xs text-muted-foreground mb-1">Desv. Estándar</p>
+              <p className="text-base font-bold font-mono">{data.kpisRotacion.desviacionEstandar.toFixed(1)} días</p>
+            </div>
+            <div className="text-center p-2 border rounded-md bg-muted/50">
+              <p className="text-xs text-muted-foreground mb-1">Total Productos</p>
+              <p className="text-base font-bold font-mono">{data.kpisRotacion.totalProductos.toLocaleString()}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            📊 Análisis basado en {data.kpisRotacion.totalProductos.toLocaleString()} productos con rotación calculada (filtrado de outliers: 0-365 días)
+          </p>
+        </VisualizationCard>
+      ) : (
+        <VisualizationCard 
+          title="KPIs de Rotación de Stock"
+          id="kpis-rotacion"
+          className="xl:col-span-3"
+        >
+          <div className="text-center p-8 text-muted-foreground">
+            <p className="text-sm">No hay datos suficientes para calcular rotación de stock.</p>
+            <p className="text-xs mt-2">Se requiere la columna "Fecha REAL entrada en almacén" en la hoja de productos.</p>
           </div>
         </VisualizationCard>
       )}

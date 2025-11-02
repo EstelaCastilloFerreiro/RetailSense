@@ -10,4 +10,4 @@ vite.config.ts.*
 .env.local
 *.log
 /tmp/
-/tmp/*
+/tmp/*.env

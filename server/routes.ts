@@ -10,6 +10,7 @@ import {
   calculateProductProfitabilityMetrics,
   calculatePhotoAnalysisData
 } from "./services/kpiCalculatorExtended";
+import { processChatbotRequest } from "./services/chatbotService";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -516,6 +517,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Dashboard photos error:", error);
       res.status(500).json({ error: error.message || "Error calculating photos data" });
+    }
+  });
+
+  // Chatbot endpoint for dynamic visualization generation
+  app.post("/api/chatbot/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { message } = req.body;
+
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const [ventas, productos, traspasos] = await Promise.all([
+        storage.getVentasData(fileId),
+        storage.getProductosData(fileId),
+        storage.getTraspasosData(fileId),
+      ]);
+
+      // Check if file exists
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      if (ventas.length === 0) {
+        return res.status(404).json({ 
+          error: "No data available",
+          message: "No hay datos disponibles para generar visualizaciones"
+        });
+      }
+
+      const response = await processChatbotRequest(
+        { message },
+        ventas,
+        productos,
+        traspasos
+      );
+
+      res.json(response);
+    } catch (error: any) {
+      console.error("Chatbot error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error processing chatbot request" 
+      });
     }
   });
 

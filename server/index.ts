@@ -1,6 +1,17 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import dotenv from "dotenv";
+
+// Cargar variables de entorno desde .env
+dotenv.config();
+
+// Verificar que OpenAI API key esté configurada
+if (process.env.OPENAI_API_KEY) {
+  console.log("✅ OpenAI API key configurada");
+} else {
+  console.log("⚠️ OpenAI API key no encontrada en .env");
+}
 
 const app = express();
 

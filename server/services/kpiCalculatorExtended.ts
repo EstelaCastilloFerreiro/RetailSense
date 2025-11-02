@@ -64,6 +64,22 @@ export interface ExtendedDashboardData {
     cantidad: number;
     temporada?: string;
   }>;
+  
+  // KPIs de Rotación de Stock (opcional, solo si hay fechaAlmacen en productos)
+  kpisRotacion?: {
+    tiendaMayorRotacion: string;
+    tiendaMayorRotacionDias: number;
+    tiendaMenorRotacion: string;
+    tiendaMenorRotacionDias: number;
+    productoMayorRotacion: string;
+    productoMayorRotacionDias: number;
+    productoMenorRotacion: string;
+    productoMenorRotacionDias: number;
+    promedioGlobal: number;
+    medianaGlobal: number;
+    desviacionEstandar: number;
+    totalProductos: number;
+  };
 }
 
 const TIENDAS_ONLINE = [
@@ -74,6 +90,273 @@ const TIENDAS_ONLINE = [
   'OUTLET TRUCCO ONLINE B2O',
   'TRUCCO ONLINE B2C'
 ];
+
+// Función para calcular métricas de rotación de stock (igual que Streamlit)
+function calculateRotationMetrics(
+  productos: ProductosData[],
+  ventas: VentasData[]
+): ExtendedDashboardData['kpisRotacion'] | undefined {
+  // Filtrar productos con fechaAlmacen válida
+  const productosConFecha = productos.filter(p => p.fechaAlmacen);
+  
+  if (productosConFecha.length === 0) {
+    return undefined;
+  }
+  
+  // Parsear fechas de almacén
+  const productosRotacion = productosConFecha.map(p => {
+    let fechaAlmacenDate: Date | null = null;
+    
+    if (p.fechaAlmacen) {
+      // Intentar múltiples formatos de fecha
+      const fechaStr = p.fechaAlmacen.toString();
+      fechaAlmacenDate = parseDate(fechaStr);
+    }
+    
+    return {
+      codigoUnico: p.codigoUnico || '',
+      talla: p.talla || '',
+      fechaAlmacen: fechaAlmacenDate,
+    };
+  }).filter(p => p.fechaAlmacen !== null && p.codigoUnico);
+  
+  // Preparar ventas con fecha válida
+  const ventasRotacion = ventas
+    .filter(v => v.fechaVenta && v.codigoUnico && (v.cantidad || 0) > 0)
+    .map(v => {
+      const fechaVentaDate = v.fechaVenta ? parseDate(v.fechaVenta.toString()) : null;
+      return {
+        codigoUnico: v.codigoUnico || '',
+        talla: v.talla || '',
+        tienda: v.tienda || '',
+        fechaVenta: fechaVentaDate,
+        familia: v.familia || '',
+      };
+    })
+    .filter(v => v.fechaVenta !== null);
+  
+  if (productosRotacion.length === 0 || ventasRotacion.length === 0) {
+    return undefined;
+  }
+  
+  // Crear mapa de productos por código único (sin talla para el merge)
+  const productosMap = new Map<string, typeof productosRotacion[0]>();
+  productosRotacion.forEach(p => {
+    productosMap.set(p.codigoUnico, p);
+  });
+  
+  // Merge ventas con productos (por código único)
+  const ventasConEntrada: Array<{
+    codigoUnico: string;
+    talla: string;
+    tienda: string;
+    fechaVenta: Date;
+    fechaAlmacen: Date;
+    familia: string;
+    diasRotacion: number;
+  }> = [];
+  
+  ventasRotacion.forEach(v => {
+    const producto = productosMap.get(v.codigoUnico);
+    if (producto && producto.fechaAlmacen && v.fechaVenta) {
+      const diasRotacion = Math.floor(
+        (v.fechaVenta.getTime() - producto.fechaAlmacen.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      
+      // Filtrar rotación válida (0-365 días y fecha venta >= fecha almacén)
+      if (diasRotacion >= 0 && diasRotacion <= 365 && v.fechaVenta >= producto.fechaAlmacen) {
+        ventasConEntrada.push({
+          codigoUnico: v.codigoUnico,
+          talla: v.talla,
+          tienda: v.tienda,
+          fechaVenta: v.fechaVenta,
+          fechaAlmacen: producto.fechaAlmacen,
+          familia: v.familia,
+          diasRotacion,
+        });
+      }
+    }
+  });
+  
+  // Necesitamos al menos 10 datos válidos
+  if (ventasConEntrada.length < 10) {
+    return undefined;
+  }
+  
+  // Calcular rotación por tienda
+  const rotacionPorTienda = new Map<string, number[]>();
+  ventasConEntrada.forEach(v => {
+    if (!rotacionPorTienda.has(v.tienda)) {
+      rotacionPorTienda.set(v.tienda, []);
+    }
+    rotacionPorTienda.get(v.tienda)!.push(v.diasRotacion);
+  });
+  
+  // Calcular rotación por producto (familia) - usar código de familia como en Streamlit
+  // IMPORTANTE: Streamlit agrupa por ['Código único', 'Familia'], no solo por Familia
+  // Pero luego usa solo 'Familia' para el resultado final, así que agrupamos por clave compuesta
+  const rotacionPorProducto = new Map<string, number[]>();
+  ventasConEntrada.forEach(v => {
+    // Crear clave compuesta: codigoUnico + familia (como Streamlit groupby(['Código único', 'Familia']))
+    const familia = v.familia || 'Sin Familia';
+    const claveProducto = `${v.codigoUnico}|${familia}`;
+    if (!rotacionPorProducto.has(claveProducto)) {
+      rotacionPorProducto.set(claveProducto, []);
+    }
+    rotacionPorProducto.get(claveProducto)!.push(v.diasRotacion);
+  });
+  
+  // Calcular estadísticas globales
+  const diasRotacionGlobal = ventasConEntrada.map(v => v.diasRotacion);
+  const promedioGlobal = diasRotacionGlobal.reduce((a, b) => a + b, 0) / diasRotacionGlobal.length;
+  const medianaGlobal = calculateMedian(diasRotacionGlobal);
+  const desviacionEstandar = calculateStdDev(diasRotacionGlobal);
+  
+  // Calcular KPIs por tienda
+  let tiendaMayorRotacion = 'Sin datos';
+  let tiendaMayorRotacionDias = 0;
+  let tiendaMenorRotacion = 'Sin datos';
+  let tiendaMenorRotacionDias = 0;
+  
+  const tiendasConfiables = Array.from(rotacionPorTienda.entries())
+    .filter(([_, dias]) => dias.length >= 3)
+    .map(([tienda, dias]) => ({
+      tienda,
+      mediana: calculateMedian(dias),
+      dias,
+    }));
+  
+  if (tiendasConfiables.length > 0) {
+    // Tienda con mayor rotación (menor mediana)
+    const tiendaMayor = tiendasConfiables.reduce((min, curr) => 
+      curr.mediana < min.mediana ? curr : min
+    );
+    tiendaMayorRotacion = tiendaMayor.tienda;
+    tiendaMayorRotacionDias = tiendaMayor.mediana;
+    
+    // Tienda con menor rotación (mayor mediana)
+    const tiendaMenor = tiendasConfiables.reduce((max, curr) => 
+      curr.mediana > max.mediana ? curr : max
+    );
+    tiendaMenorRotacion = tiendaMenor.tienda;
+    tiendaMenorRotacionDias = tiendaMenor.mediana;
+  }
+  
+  // Calcular KPIs por producto (familia)
+  // IMPORTANTE: Streamlit agrupa por ['Código único', 'Familia'] pero luego usa solo 'Familia' para el resultado final
+  // Necesitamos reagrupar por familia después de agrupar por clave compuesta
+  const rotacionPorFamilia = new Map<string, number[]>();
+  rotacionPorProducto.forEach((dias, claveProducto) => {
+    // Extraer familia de la clave compuesta (formato: "codigoUnico|familia")
+    const familia = claveProducto.split('|')[1] || 'Sin Familia';
+    if (!rotacionPorFamilia.has(familia)) {
+      rotacionPorFamilia.set(familia, []);
+    }
+    // Agregar todos los días de rotación de este producto
+    dias.forEach(dia => rotacionPorFamilia.get(familia)!.push(dia));
+  });
+  
+  let productoMayorRotacion = 'Sin datos';
+  let productoMayorRotacionDias = 0;
+  let productoMenorRotacion = 'Sin datos';
+  let productoMenorRotacionDias = 0;
+  
+  // Filtrar productos con mínimo 2 ventas (como Streamlit: Ventas_Con_Rotacion >= 2)
+  // Nota: Streamlit cuenta ventas por producto único, pero aquí contamos por familia
+  // Necesitamos contar cuántos productos únicos tiene cada familia
+  const productosConfiables = Array.from(rotacionPorFamilia.entries())
+    .filter(([familia, dias]) => {
+      // Contar productos únicos de esta familia
+      const productosUnicosFamilia = Array.from(rotacionPorProducto.keys())
+        .filter(clave => clave.split('|')[1] === familia).length;
+      // Requerir al menos 2 productos únicos (como Streamlit requiere >= 2 ventas)
+      return productosUnicosFamilia >= 2 && dias.length >= 2;
+    })
+    .map(([familia, dias]) => ({
+      familia,
+      mediana: calculateMedian(dias),
+      dias,
+    }));
+  
+  if (productosConfiables.length > 0) {
+    // Producto con mayor rotación (menor mediana)
+    const productoMayor = productosConfiables.reduce((min, curr) => 
+      curr.mediana < min.mediana ? curr : min
+    );
+    productoMayorRotacion = productoMayor.familia;
+    productoMayorRotacionDias = productoMayor.mediana;
+    
+    // Producto con menor rotación (mayor mediana)
+    const productoMenor = productosConfiables.reduce((max, curr) => 
+      curr.mediana > max.mediana ? curr : max
+    );
+    productoMenorRotacion = productoMenor.familia;
+    productoMenorRotacionDias = productoMenor.mediana;
+  }
+  
+  return {
+    tiendaMayorRotacion,
+    tiendaMayorRotacionDias,
+    tiendaMenorRotacion,
+    tiendaMenorRotacionDias,
+    productoMayorRotacion,
+    productoMayorRotacionDias,
+    productoMenorRotacion,
+    productoMenorRotacionDias,
+    promedioGlobal,
+    medianaGlobal,
+    desviacionEstandar,
+    totalProductos: ventasConEntrada.length,
+  };
+}
+
+// Función auxiliar para parsear fechas
+function parseDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  
+  // Intentar múltiples formatos
+  const formats = [
+    /^(\d{2})\/(\d{2})\/(\d{4})$/, // DD/MM/YYYY
+    /^(\d{4})-(\d{2})-(\d{2})$/, // YYYY-MM-DD
+  ];
+  
+  for (const format of formats) {
+    const match = dateStr.match(format);
+    if (match) {
+      if (format === formats[0]) {
+        // DD/MM/YYYY
+        const [, day, month, year] = match;
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } else {
+        // YYYY-MM-DD
+        const [, year, month, day] = match;
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      }
+    }
+  }
+  
+  // Fallback: intentar parseo directo
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+// Función auxiliar para calcular mediana
+function calculateMedian(numbers: number[]): number {
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+// Función auxiliar para calcular desviación estándar
+function calculateStdDev(numbers: number[]): number {
+  if (numbers.length === 0) return 0;
+  const mean = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+  const squareDiffs = numbers.map(value => Math.pow(value - mean, 2));
+  const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / numbers.length;
+  return Math.sqrt(avgSquareDiff);
+}
 
 export function calculateExtendedDashboardData(
   ventas: VentasData[],
@@ -227,6 +510,33 @@ export function calculateExtendedDashboardData(
     .map(([talla, cantidad]) => ({ talla, cantidad }))
     .sort((a, b) => b.cantidad - a.cantidad);
   
+  // Calcular KPIs de Rotación de Stock (igual que Streamlit)
+  let kpisRotacion: ExtendedDashboardData['kpisRotacion'] | undefined;
+  
+  // Verificar si tenemos fechaAlmacen en productos
+  const productosConFechaAlmacen = productos.filter(p => p.fechaAlmacen);
+  
+  console.log(`📊 Rotación: ${productosConFechaAlmacen.length} productos con fechaAlmacen de ${productos.length} total`);
+  
+  if (productosConFechaAlmacen.length > 0 && ventasReales.length > 0) {
+    kpisRotacion = calculateRotationMetrics(
+      productosConFechaAlmacen,
+      ventasReales
+    );
+    
+    if (kpisRotacion) {
+      console.log(`✅ KPIs de Rotación calculados:`, {
+        tiendaMayor: kpisRotacion.tiendaMayorRotacion,
+        productoMayor: kpisRotacion.productoMayorRotacion,
+        totalProductos: kpisRotacion.totalProductos
+      });
+    } else {
+      console.log(`⚠️ No se pudieron calcular KPIs de Rotación (insuficientes datos válidos)`);
+    }
+  } else {
+    console.log(`⚠️ No se pueden calcular KPIs de Rotación: productos con fecha=${productosConFechaAlmacen.length}, ventas=${ventasReales.length}`);
+  }
+  
   return {
     alcance,
     kpisGenerales,
@@ -236,6 +546,7 @@ export function calculateExtendedDashboardData(
     topTiendas,
     bottomTiendas,
     ventasPorTalla,
+    kpisRotacion,
   };
 }
 
@@ -742,6 +1053,53 @@ export function calculateProductProfitabilityMetrics(
 ): ProductProfitabilityMetrics {
   let filteredVentas = filters ? applyFilters(ventas, filters) : ventas;
   
+  // Excluir GR.ART.FICTICIO de todos los cálculos
+  filteredVentas = filteredVentas.filter(v => {
+    const familiaNombre = (v.descripcionFamilia || v.familia || '').trim();
+    const familiaCodigo = (v.familia || '').trim();
+    
+    // Normalizar: eliminar espacios múltiples y convertir a mayúsculas
+    const nombreNormalizado = familiaNombre.replace(/\s+/g, ' ').trim().toUpperCase();
+    const codigoNormalizado = familiaCodigo.replace(/\s+/g, ' ').trim().toUpperCase();
+    
+    // Verificar múltiples variaciones posibles
+    const esFicticio = 
+      nombreNormalizado.includes('GR.ART.FICTICIO') || 
+      nombreNormalizado.includes('GR ART FICTICIO') ||
+      nombreNormalizado.includes('GR-ART-FICTICIO') ||
+      nombreNormalizado.includes('FICTICIO') ||
+      nombreNormalizado === 'GR.ART.FICTICIO' ||
+      codigoNormalizado.includes('GR.ART.FICTICIO') ||
+      codigoNormalizado.includes('GR ART FICTICIO') ||
+      codigoNormalizado.includes('GR-ART-FICTICIO') ||
+      codigoNormalizado.includes('FICTICIO') ||
+      codigoNormalizado === 'GR.ART.FICTICIO';
+    
+    return !esFicticio;
+  });
+  
+  // Debug: verificar que el filtro funciona
+  const devolucionesDebug = filteredVentas.filter(v => (v.cantidad || 0) < 0);
+  const familiasEnDevoluciones = new Set(devolucionesDebug.map(v => (v.descripcionFamilia || v.familia || '').trim()));
+  const tieneFicticio = Array.from(familiasEnDevoluciones).some(f => 
+    f.toUpperCase().includes('FICTICIO') || f.toUpperCase().includes('GR.ART.FICTICIO')
+  );
+  if (tieneFicticio) {
+    const familiasFicticio = Array.from(familiasEnDevoluciones).filter(f => {
+      const fUpper = f.toUpperCase();
+      return fUpper.includes('FICTICIO') || fUpper.includes('GR.ART.FICTICIO');
+    });
+    console.log('⚠️ WARNING: Se encontraron familias FICTICIO en devoluciones después del filtro:', familiasFicticio);
+    console.log('⚠️ Detalle de las familias encontradas:', familiasFicticio.map(f => `"${f}"`));
+  }
+  
+  // Log adicional: mostrar todas las familias en devoluciones para debug
+  const todasLasFamilias = Array.from(familiasEnDevoluciones).sort();
+  const familiasConFicticio = todasLasFamilias.filter(f => f.toUpperCase().includes('FICTICIO'));
+  if (familiasConFicticio.length > 0) {
+    console.log('⚠️ DEBUG: Familias con FICTICIO encontradas:', familiasConFicticio);
+  }
+  
   // Merge con productos para obtener precio coste
   const productosMap = new Map(productos.map(p => [p.codigoUnico, p]));
   const ventasConPrecio = filteredVentas.map(v => ({
@@ -749,7 +1107,7 @@ export function calculateProductProfitabilityMetrics(
     precioCoste: v.precioCoste || productosMap.get(v.codigoUnico || '')?.precioCoste || 0,
   }));
   
-  // KPIs Devoluciones
+  // KPIs Devoluciones (ya excluye GR.ART.FICTICIO)
   const devoluciones = ventasConPrecio.filter(v => (v.cantidad || 0) < 0);
   const ventasPositivas = ventasConPrecio.filter(v => (v.cantidad || 0) > 0);
   
@@ -803,25 +1161,59 @@ export function calculateProductProfitabilityMetrics(
     }
   });
   
-  // Familia más devuelta - usar descripcionFamilia (nombre) en lugar de familia (código)
-  // Excluir GR.ART.FICTICIO del cálculo
+  // Familia más devuelta - usar código de familia como en Streamlit
+  // Streamlit: devoluciones.groupby('Familia')['Cantidad'].sum().abs().sort_values(ascending=False).head(1)
+  // GR.ART.FICTICIO ya está excluido en filteredVentas
   const familiaDevolucionesMap = new Map<string, number>();
   devoluciones.forEach(v => {
-    const familiaNombre = (v.descripcionFamilia || v.familia || 'Sin Familia').trim();
-    // Excluir GR.ART.FICTICIO
-    if (familiaNombre !== 'GR.ART.FICTICIO') {
-      familiaDevolucionesMap.set(familiaNombre, (familiaDevolucionesMap.get(familiaNombre) || 0) + Math.abs(v.cantidad || 0));
+    const familiaCodigo = (v.familia || '').trim();
+    
+    // Verificación adicional: excluir GR.ART.FICTICIO si aún aparece
+    const codigoNormalizado = familiaCodigo.replace(/\s+/g, ' ').trim().toUpperCase();
+    const esFicticio = 
+      codigoNormalizado.includes('GR.ART.FICTICIO') ||
+      codigoNormalizado.includes('GR ART FICTICIO') ||
+      codigoNormalizado.includes('GR-ART-FICTICIO') ||
+      codigoNormalizado.includes('FICTICIO') ||
+      codigoNormalizado === 'GR.ART.FICTICIO';
+    
+    if (familiaCodigo && !esFicticio) {
+      // Sumar cantidades (unidades) como en Streamlit
+      familiaDevolucionesMap.set(familiaCodigo, (familiaDevolucionesMap.get(familiaCodigo) || 0) + Math.abs(v.cantidad || 0));
     }
   });
   
   let familiaMasDevuelta = 'N/A';
   let familiaMasDevueltaUnidades = 0;
-  familiaDevolucionesMap.forEach((cantidad, familia) => {
-    if (cantidad > familiaMasDevueltaUnidades) {
-      familiaMasDevuelta = familia;
-      familiaMasDevueltaUnidades = cantidad;
-    }
-  });
+  
+  // Solo calcular si hay familias válidas (excluyendo GR.ART.FICTICIO)
+  if (familiaDevolucionesMap.size > 0) {
+    familiaDevolucionesMap.forEach((cantidad, familiaCodigo) => {
+      // Verificación final: asegurar que no es FICTICIO
+      const codigoNormalizado = familiaCodigo.replace(/\s+/g, ' ').trim().toUpperCase();
+      const esFicticio = 
+        codigoNormalizado.includes('FICTICIO') || 
+        codigoNormalizado.includes('GR.ART.FICTICIO') ||
+        codigoNormalizado.includes('GR ART FICTICIO') ||
+        codigoNormalizado.includes('GR-ART-FICTICIO');
+      
+      if (!esFicticio && cantidad > familiaMasDevueltaUnidades) {
+        familiaMasDevuelta = familiaCodigo;
+        familiaMasDevueltaUnidades = cantidad;
+      }
+    });
+  }
+  
+  // Log para debug
+  const familiaMasDevueltaNormalizada = familiaMasDevuelta.replace(/\s+/g, ' ').trim().toUpperCase();
+  if (familiaMasDevueltaNormalizada.includes('FICTICIO') || familiaMasDevueltaNormalizada.includes('GR.ART.FICTICIO')) {
+    console.log('⚠️ ERROR: La familia más devuelta es FICTICIO:', familiaMasDevuelta);
+    familiaMasDevuelta = 'N/A';
+    familiaMasDevueltaUnidades = 0;
+  }
+  
+  // Log final: mostrar qué familia se retorna
+  console.log('📊 Familia más devuelta calculada:', familiaMasDevuelta, '(', familiaMasDevueltaUnidades, 'unidades)');
   
   // KPIs Rebajas (solo ventas positivas)
   const ventasConRebajas = ventasPositivas.map(v => {
@@ -848,45 +1240,70 @@ export function calculateProductProfitabilityMetrics(
   const rebajas2Porcentaje = totalVentas > 0 ? (rebajas2Valor / totalVentas) * 100 : 0;
   
   // KPIs Margen
-  const ventasConMargen = ventasPositivas.filter(v => (v.cantidad || 0) > 0 && v.precioCoste);
+  // Streamlit: solo ventas positivas con precio de coste
+  // precio_real_unitario = Beneficio / Cantidad
+  // margen_unitario = precio_real_unitario - Precio Coste
+  // margen_% = (margen_unitario / precio_real_unitario) * 100
+  // Mostrar solo promedio de valores positivos como en Streamlit
+  const ventasConMargen = ventasPositivas.filter(v => (v.cantidad || 0) > 0 && v.precioCoste && v.precioCoste > 0);
+  
   let sumaMargenUnitario = 0;
   let sumaMargenPorcentual = 0;
   let countMargen = 0;
+  
+  let sumaMargenUnitarioPositivo = 0;
+  let sumaMargenPorcentualPositivo = 0;
+  let countMargenPositivo = 0;
   
   ventasConMargen.forEach(v => {
     const precioRealUnitario = (v.subtotal || 0) / (v.cantidad || 1);
     const margenUnitario = precioRealUnitario - (v.precioCoste || 0);
     const margenPorcentaje = precioRealUnitario > 0 ? (margenUnitario / precioRealUnitario) * 100 : 0;
     
+    // Promedio de todos
     sumaMargenUnitario += margenUnitario;
     sumaMargenPorcentual += margenPorcentaje;
     countMargen++;
+    
+    // Promedio solo de positivos (como Streamlit muestra)
+    if (margenUnitario > 0) {
+      sumaMargenUnitarioPositivo += margenUnitario;
+      sumaMargenPorcentualPositivo += margenPorcentaje;
+      countMargenPositivo++;
+    }
   });
   
-  const margenUnitarioPromedio = countMargen > 0 ? sumaMargenUnitario / countMargen : 0;
-  const margenPorcentualPromedio = countMargen > 0 ? sumaMargenPorcentual / countMargen : 0;
+  // Usar solo valores positivos como Streamlit muestra
+  const margenUnitarioPromedio = countMargenPositivo > 0 ? sumaMargenUnitarioPositivo / countMargenPositivo : 0;
+  const margenPorcentualPromedio = countMargenPositivo > 0 ? sumaMargenPorcentualPositivo / countMargenPositivo : 0;
   
   // Ventas vs Devoluciones por Familia
-  // Usar descripcionFamilia (nombre) en lugar de familia (código)
+  // Streamlit: ventas.groupby('Familia')['Cantidad'].sum() y devoluciones.groupby('Familia')['Cantidad'].sum()
+  // Usar código de familia ('Familia') como en Streamlit, no descripcionFamilia
   // Usar cantidad (unidades) en lugar de subtotal (beneficio) para coincidir con Streamlit
   const familiaVentasMap = new Map<string, { ventas: number; devoluciones: number }>();
   
   ventasPositivas.forEach(v => {
-    const familiaNombre = v.descripcionFamilia || v.familia || 'Sin Familia';
-    if (!familiaVentasMap.has(familiaNombre)) {
-      familiaVentasMap.set(familiaNombre, { ventas: 0, devoluciones: 0 });
+    const familiaCodigo = (v.familia || '').trim();
+    if (familiaCodigo) {
+      if (!familiaVentasMap.has(familiaCodigo)) {
+        familiaVentasMap.set(familiaCodigo, { ventas: 0, devoluciones: 0 });
+      }
+      // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
+      familiaVentasMap.get(familiaCodigo)!.ventas += Math.abs(v.cantidad || 0);
     }
-    // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
-    familiaVentasMap.get(familiaNombre)!.ventas += Math.abs(v.cantidad || 0);
   });
   
+  // devoluciones ya está filtrado sin GR.ART.FICTICIO
   devoluciones.forEach(v => {
-    const familiaNombre = v.descripcionFamilia || v.familia || 'Sin Familia';
-    if (!familiaVentasMap.has(familiaNombre)) {
-      familiaVentasMap.set(familiaNombre, { ventas: 0, devoluciones: 0 });
+    const familiaCodigo = (v.familia || '').trim();
+    if (familiaCodigo) {
+      if (!familiaVentasMap.has(familiaCodigo)) {
+        familiaVentasMap.set(familiaCodigo, { ventas: 0, devoluciones: 0 });
+      }
+      // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
+      familiaVentasMap.get(familiaCodigo)!.devoluciones += Math.abs(v.cantidad || 0);
     }
-    // Usar cantidad (unidades) en lugar de subtotal para coincidir con Streamlit
-    familiaVentasMap.get(familiaNombre)!.devoluciones += Math.abs(v.cantidad || 0);
   });
   
   const ventasVsDevolucionesPorFamilia = Array.from(familiaVentasMap.entries())

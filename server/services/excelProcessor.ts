@@ -28,6 +28,22 @@ const COLUMN_MAPPINGS = {
     'Cantidad Pedida': 'cantidadPedida',
     'P.V.P.': 'pvp',
     'Precio Coste': 'precioCoste',
+    // Mapeos para fechaAlmacen - múltiples variaciones posibles
+    // IMPORTANTE: Streamlit usa 'Fecha almacén' (sin "REAL entrada en")
+    'Fecha almacén': 'fechaAlmacen', // Versión corta - PRIMARIA
+    'Fecha almacen': 'fechaAlmacen', // Sin tilde
+    'Fecha REAL entrada en almacén': 'fechaAlmacen', // Versión completa
+    'Fecha REAL entrada en almacen': 'fechaAlmacen', // Sin tilde
+    'Fecha Real Entrada en Almacén': 'fechaAlmacen', // Variación de mayúsculas
+    'Fecha Real Entrada en Almacen': 'fechaAlmacen', // Sin tilde y variación mayúsculas
+    'Fecha real entrada en almacén': 'fechaAlmacen', // Todo minúsculas
+    'Fecha real entrada en almacen': 'fechaAlmacen', // Todo minúsculas sin tilde
+    'FECHA REAL ENTRADA EN ALMACÉN': 'fechaAlmacen', // Todo mayúsculas
+    'FECHA REAL ENTRADA EN ALMACEN': 'fechaAlmacen', // Todo mayúsculas sin tilde
+    'FECHA ALMACÉN': 'fechaAlmacen', // Todo mayúsculas corta
+    'FECHA ALMACEN': 'fechaAlmacen', // Todo mayúsculas corta sin tilde
+    'Fecha REAL entrada en Almacén': 'fechaAlmacen', // Mezcla
+    'Fecha REAL entrada en Almacen': 'fechaAlmacen', // Mezcla sin tilde
     'Talla': 'talla',
     'Descripción Color': 'color',
     'Temporada': 'temporada',
@@ -60,14 +76,33 @@ const TIENDAS_A_ELIMINAR = [
 
 function mapRow(row: any, mapping: Record<string, string>): any {
   const mapped: any = {};
+  
+  // Primero aplicar mapeo exacto
   for (const [excelCol, schemaCol] of Object.entries(mapping)) {
     const value = row[excelCol];
-    // Only include non-empty values
-    if (value !== undefined && value !== null && value !== '') {
-      // Convert to string and trim if it's a string
+    // Incluir valores incluso si están vacíos, pero no si son undefined
+    if (value !== undefined && value !== null) {
+      // Convertir a string y trim si es string
       mapped[schemaCol] = typeof value === 'string' ? value.trim() : value;
     }
   }
+  
+  // También buscar con normalización (case insensitive) si no se encontró en el mapeo exacto
+  // Esto es especialmente útil para fechaAlmacen que puede tener variaciones
+  const mappedKeys = new Set(Object.values(mapping));
+  for (const [excelCol, schemaCol] of Object.entries(mapping)) {
+    if (mapped[schemaCol] === undefined) {
+      // Buscar en el row con normalización
+      const excelColLower = excelCol.trim().toLowerCase();
+      for (const [rowKey, rowValue] of Object.entries(row)) {
+        if (rowKey.trim().toLowerCase() === excelColLower && rowValue !== undefined && rowValue !== null) {
+          mapped[schemaCol] = typeof rowValue === 'string' ? rowValue.trim() : rowValue;
+          break;
+        }
+      }
+    }
+  }
+  
   return mapped;
 }
 
@@ -79,54 +114,82 @@ function cleanNumericValue(value: any): number | undefined {
 
 function formatDate(excelDate: any): string {
   try {
-    if (!excelDate) return new Date().toISOString().split('T')[0];
+    if (!excelDate) return '';
     
-    // If it's already a string in DD/MM/YYYY format
-    if (typeof excelDate === 'string') {
-      // Handle DD/MM/YYYY format
-      const slashParts = excelDate.split('/');
-      if (slashParts.length === 3) {
-        const [day, month, year] = slashParts;
-        const fullYear = year.length === 2 ? `20${year}` : year;
-        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    // Si es un objeto Date válido, convertir directamente
+    if (excelDate instanceof Date) {
+      if (isNaN(excelDate.getTime())) return '';
+      return excelDate.toISOString().split('T')[0];
+    }
+    
+    // Si es un número de Excel (serial date), convertirlo
+    if (typeof excelDate === 'number') {
+      // Primero intentar con XLSX.SSF si está disponible
+      try {
+        if (XLSX.SSF && XLSX.SSF.parse_date_code) {
+          const date = XLSX.SSF.parse_date_code(excelDate);
+          if (date && date.y && date.m && date.d) {
+            const year = date.y;
+            const month = String(date.m).padStart(2, '0');
+            const day = String(date.d).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          }
+        }
+      } catch (e) {
+        // Si falla, usar método alternativo
       }
+      // Método alternativo: Excel serial date (número de días desde el 1 de enero de 1900)
+      // Excel cuenta desde el 30 de diciembre de 1899, pero hay un bug conocido del año 1900
+      const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899
+      const date = new Date(excelEpoch.getTime() + (excelDate - 1) * 24 * 60 * 60 * 1000);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    
+    // If it's already a string
+    if (typeof excelDate === 'string') {
+      const trimmed = excelDate.trim();
+      if (!trimmed) return '';
       
       // Handle YYYY-MM-DD format (already ISO)
-      if (excelDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-        return excelDate.split('T')[0]; // Remove time part if present
+      if (trimmed.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return trimmed.split('T')[0].split(' ')[0]; // Remove time part if present
+      }
+      
+      // Handle DD/MM/YYYY format
+      const slashParts = trimmed.split('/');
+      if (slashParts.length === 3) {
+        const [day, month, year] = slashParts.map(p => p.trim());
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        const parsedDate = new Date(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString().split('T')[0];
+        }
+      }
+      
+      // Handle DD-MM-YYYY format
+      const dashParts = trimmed.split('-');
+      if (dashParts.length === 3 && dashParts[0].length <= 2) {
+        const [day, month, year] = dashParts.map(p => p.trim());
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        const parsedDate = new Date(`${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toISOString().split('T')[0];
+        }
+      }
+      
+      // Intentar parsear como fecha estándar (último recurso)
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
       }
     }
     
-    // If it's an Excel serial number
-    if (typeof excelDate === 'number') {
-      const date = XLSX.SSF.parse_date_code(excelDate);
-      const year = date.y;
-      const month = String(date.m).padStart(2, '0');
-      const day = String(date.d).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    
-    // If it's a Date object
-    if (excelDate instanceof Date) {
-      const year = excelDate.getFullYear();
-      const month = String(excelDate.getMonth() + 1).padStart(2, '0');
-      const day = String(excelDate.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    
-    // Fallback: try to parse as date
-    const parsed = new Date(excelDate);
-    if (!isNaN(parsed.getTime())) {
-      const year = parsed.getFullYear();
-      const month = String(parsed.getMonth() + 1).padStart(2, '0');
-      const day = String(parsed.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-    
-    return new Date().toISOString().split('T')[0];
+    return '';
   } catch (error) {
-    console.error('Error formatting date:', excelDate, error);
-    return new Date().toISOString().split('T')[0];
+    console.error('Error formatting date:', error, 'Value:', excelDate, 'Type:', typeof excelDate);
+    return '';
   }
 }
 
@@ -137,7 +200,13 @@ export function processExcelFile(buffer: Buffer): {
   sheets: string[];
 } {
   console.log('Reading workbook...');
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  // Leer con cellDates: true para convertir fechas automáticamente
+  const workbook = XLSX.read(buffer, { 
+    type: 'buffer', 
+    cellDates: true,
+    cellNF: false,
+    cellText: false
+  });
   const sheets = workbook.SheetNames;
   console.log('Workbook read successfully, sheets:', sheets);
 
@@ -285,17 +354,329 @@ export function processExcelFile(buffer: Buffer): {
   const productosSheetName = sheets.find(s => s.toLowerCase().includes('compra')) || sheets[1];
   if (productosSheetName) {
     const productosSheet = workbook.Sheets[productosSheetName];
-    const productosRaw = XLSX.utils.sheet_to_json(productosSheet, { defval: null });
+    
+    // Primero obtener las columnas del header para detectar fechaAlmacen antes de convertir
+    const range = XLSX.utils.decode_range(productosSheet['!ref'] || 'A1');
+    const headerRow: string[] = [];
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c: C });
+      const cell = productosSheet[cellAddress];
+      if (cell) {
+        headerRow.push(cell.v ? String(cell.v).trim() : '');
+      } else {
+        headerRow.push('');
+      }
+    }
+    
+    console.log('📦 Headers originales del sheet:', headerRow);
+    
+    // Leer con raw: false y cellDates: true para detectar fechas automáticamente
+    const productosRaw = XLSX.utils.sheet_to_json(productosSheet, { 
+      defval: null,
+      raw: false, // Convertir valores a strings/texto en lugar de números raw
+      dateNF: 'dd/mm/yyyy', // Formato de fecha esperado
+      cellDates: true, // Intentar detectar fechas automáticamente
+      cellText: false // No usar valores de texto, usar valores convertidos
+    });
+    
+    // Log columnas de productos para debug y auto-mapeo mejorado
+    if (productosRaw.length > 0) {
+      const firstRow = productosRaw[0] as any;
+      const actualColumns = Object.keys(firstRow);
+      console.log('📦 Productos sheet columns (desde JSON):', actualColumns);
+      console.log('📦 Headers originales:', headerRow);
+      console.log('📦 Sample productos row:', JSON.stringify(firstRow, null, 2).substring(0, 500));
+      
+      // Buscar columna de fechaAlmacen con múltiples estrategias
+      let fechaAlmacenColumn: string | null = null;
+      
+      // Normalizar headers para comparación (eliminar espacios extra, convertir a minúsculas)
+      const normalizedHeaders = headerRow.map(h => h.trim().toLowerCase());
+      const normalizedActualColumns = actualColumns.map(c => c.trim().toLowerCase());
+      
+      // Estrategia 1: Buscar coincidencia exacta en el mapeo (comparando normalizado)
+      for (const col of actualColumns) {
+        const normalizedCol = col.trim().toLowerCase();
+        // Buscar en el mapeo con normalización
+        for (const [mapKey, mapValue] of Object.entries(COLUMN_MAPPINGS.productos)) {
+          if (mapValue === 'fechaAlmacen' && normalizedCol === mapKey.trim().toLowerCase()) {
+            fechaAlmacenColumn = col;
+            console.log(`✅ Encontrada columna fechaAlmacen exacta: "${col}" (mapeada desde "${mapKey}")`);
+            break;
+          }
+        }
+        if (fechaAlmacenColumn) break;
+      }
+      
+      // Estrategia 2: Buscar por patrones en headers originales Y en columnas JSON
+      // IMPORTANTE: Priorizar "Fecha almacén" (sin "REAL entrada en") como Streamlit
+      if (!fechaAlmacenColumn) {
+        const allPossibleColumns = [...new Set([...headerRow, ...actualColumns])];
+        
+        // Primero buscar la versión corta "Fecha almacén" (prioridad)
+        const fechaAlmacenKeys = allPossibleColumns.filter(col => {
+          const colLower = col.trim().toLowerCase();
+          // Prioridad 1: Versión corta exacta "fecha almacén" o "fecha almacen"
+          if (colLower === 'fecha almacén' || colLower === 'fecha almacen') {
+            return true;
+          }
+          // Prioridad 2: Contiene "fecha" y "almacén" pero NO contiene "real" ni "entrada"
+          if (colLower.includes('fecha') && (colLower.includes('almacén') || colLower.includes('almacen'))) {
+            if (!colLower.includes('real') && !colLower.includes('entrada')) {
+              return true;
+            }
+          }
+          // Prioridad 3: Versión completa con "real entrada"
+          return (
+            (colLower.includes('fecha') && colLower.includes('real') && colLower.includes('entrada')) ||
+            colLower.includes('fecha_real_entrada') ||
+            colLower.includes('fecha real entrada en almacén') ||
+            colLower.includes('fecha real entrada en almacen')
+          );
+        });
+        
+        console.log('📦 Columnas con "fecha" y "almacén" encontradas:', fechaAlmacenKeys);
+        
+        if (fechaAlmacenKeys.length > 0) {
+          // Priorizar versión corta si existe
+          let foundCol = fechaAlmacenKeys.find(col => {
+            const colLower = col.trim().toLowerCase();
+            return colLower === 'fecha almacén' || colLower === 'fecha almacen';
+          });
+          
+          // Si no hay versión corta, buscar versión sin "real entrada"
+          if (!foundCol) {
+            foundCol = fechaAlmacenKeys.find(col => {
+              const colLower = col.trim().toLowerCase();
+              return colLower.includes('fecha') && 
+                     (colLower.includes('almacén') || colLower.includes('almacen')) &&
+                     !colLower.includes('real') && 
+                     !colLower.includes('entrada');
+            });
+          }
+          
+          // Si aún no hay, usar la primera encontrada
+          if (!foundCol) {
+            foundCol = fechaAlmacenKeys[0];
+          }
+          
+          // Usar la columna que existe en actualColumns
+          const foundColInActual = actualColumns.find(c => 
+            c.trim().toLowerCase() === foundCol.trim().toLowerCase()
+          ) || foundCol;
+          
+          fechaAlmacenColumn = foundColInActual;
+          console.log(`✅ Auto-mapeando "${fechaAlmacenColumn}" a fechaAlmacen`);
+          // Asegurarse de que el mapeo esté configurado
+          COLUMN_MAPPINGS.productos[fechaAlmacenColumn] = 'fechaAlmacen';
+          // También mapear todas las variaciones posibles
+          fechaAlmacenKeys.forEach(key => {
+            if (!COLUMN_MAPPINGS.productos[key]) {
+              COLUMN_MAPPINGS.productos[key] = 'fechaAlmacen';
+            }
+          });
+        }
+      }
+      
+      // Estrategia 3: Buscar cualquier columna que contenga "fecha" y "real" y "entrada"
+      if (!fechaAlmacenColumn) {
+        const allPossibleColumns = [...new Set([...headerRow, ...actualColumns])];
+        const fechaRealKeys = allPossibleColumns.filter(col => {
+          const colLower = col.trim().toLowerCase();
+          return colLower.includes('fecha') && colLower.includes('real') && colLower.includes('entrada');
+        });
+        if (fechaRealKeys.length > 0) {
+          const foundCol = actualColumns.find(c => 
+            fechaRealKeys.some(key => c.trim().toLowerCase() === key.trim().toLowerCase())
+          ) || fechaRealKeys[0];
+          fechaAlmacenColumn = foundCol;
+          console.log(`✅ Encontrada columna alternativa: "${fechaAlmacenColumn}"`);
+          COLUMN_MAPPINGS.productos[fechaAlmacenColumn] = 'fechaAlmacen';
+        }
+      }
+      
+      // Estrategia 4: Buscar cualquier columna que contenga "fecha" y "almacén" o "almacen"
+      if (!fechaAlmacenColumn) {
+        const allPossibleColumns = [...new Set([...headerRow, ...actualColumns])];
+        const fechaKeys = allPossibleColumns.filter(col => {
+          const colLower = col.trim().toLowerCase();
+          return colLower.includes('fecha') && (colLower.includes('almacén') || colLower.includes('almacen'));
+        });
+        if (fechaKeys.length > 0) {
+          const foundCol = actualColumns.find(c => 
+            fechaKeys.some(key => c.trim().toLowerCase() === key.trim().toLowerCase())
+          ) || fechaKeys[0];
+          fechaAlmacenColumn = foundCol;
+          console.log(`✅ Encontrada columna con fecha y almacén: "${fechaAlmacenColumn}"`);
+          COLUMN_MAPPINGS.productos[fechaAlmacenColumn] = 'fechaAlmacen';
+        }
+      }
+      
+      // Estrategia 5: Buscar en headers originales con coincidencia parcial más flexible
+      if (!fechaAlmacenColumn) {
+        for (let i = 0; i < headerRow.length; i++) {
+          const header = headerRow[i].trim().toLowerCase();
+          // Buscar patrones más flexibles
+          if (
+            (header.includes('fecha') && header.includes('almac')) ||
+            (header.includes('entrada') && header.includes('almac')) ||
+            (header.includes('fecha') && header.includes('real') && header.includes('entrada'))
+          ) {
+            // Mapear el header original a la columna en el JSON
+            // XLSX usa el header como clave si está disponible
+            const jsonCol = actualColumns.find(c => 
+              c.trim().toLowerCase() === headerRow[i].trim().toLowerCase()
+            ) || headerRow[i];
+            fechaAlmacenColumn = jsonCol;
+            console.log(`✅ Encontrada columna desde header original: "${fechaAlmacenColumn}" (header: "${headerRow[i]}")`);
+            COLUMN_MAPPINGS.productos[fechaAlmacenColumn] = 'fechaAlmacen';
+            break;
+          }
+        }
+      }
+      
+      // Log final
+      if (fechaAlmacenColumn) {
+        console.log(`✅ Columna fechaAlmacen detectada y mapeada: "${fechaAlmacenColumn}"`);
+        // Mostrar un ejemplo del valor
+        if (firstRow[fechaAlmacenColumn]) {
+          console.log(`📅 Valor de ejemplo: "${firstRow[fechaAlmacenColumn]}" (tipo: ${typeof firstRow[fechaAlmacenColumn]})`);
+        }
+        
+        // Verificar cuántas filas tienen valores en esta columna
+        const rowsWithValue = productosRaw.filter((row: any) => {
+          const value = row[fechaAlmacenColumn];
+          return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+        }).length;
+        console.log(`📅 Filas con valores en "${fechaAlmacenColumn}": ${rowsWithValue} de ${productosRaw.length}`);
+      } else {
+        console.log(`⚠️ NO se encontró columna fechaAlmacen. Columnas disponibles:`, actualColumns);
+        const fechaColumns = actualColumns.filter(col => col.toLowerCase().includes('fecha'));
+        console.log(`📅 Columnas que contienen "fecha":`, fechaColumns);
+        
+        // Mostrar todas las columnas disponibles para debug
+        console.log(`📋 Todas las columnas del sheet "Compra":`, actualColumns.map((col, idx) => `  ${idx + 1}. "${col}"`).join('\n'));
+        
+        // Intentar buscar cualquier variación de "almacén"
+        const almacenColumns = actualColumns.filter(col => 
+          col.toLowerCase().includes('almac') || col.toLowerCase().includes('almacen')
+        );
+        if (almacenColumns.length > 0) {
+          console.log(`📦 Columnas que contienen "almacén":`, almacenColumns);
+        }
+      }
+    }
     
     productos = productosRaw
       .map((row: any, index: number) => {
         try {
           const mapped = mapRow(row, COLUMN_MAPPINGS.productos);
           
+          // Si fechaAlmacenColumn fue detectada pero no está en mapped, buscar directamente con múltiples estrategias
+          if (fechaAlmacenColumn && !mapped.fechaAlmacen) {
+            // Estrategia 1: Buscar por nombre exacto (case insensitive) en el row
+            for (const [key, value] of Object.entries(row)) {
+              if (key.trim().toLowerCase() === fechaAlmacenColumn.trim().toLowerCase()) {
+                mapped.fechaAlmacen = value;
+                console.log(`✅ Encontrado fechaAlmacen en row por clave exacta: "${key}"`);
+                break;
+              }
+            }
+            
+            // Estrategia 2: Buscar en headers originales y usar índice de columna
+            if (!mapped.fechaAlmacen && fechaAlmacenColumn) {
+              const headerIndex = headerRow.findIndex(h => 
+                h.trim().toLowerCase() === fechaAlmacenColumn.trim().toLowerCase()
+              );
+              if (headerIndex >= 0) {
+                // XLSX puede usar índices de columna como clave alternativa
+                const colLetter = String.fromCharCode(65 + headerIndex); // A, B, C...
+                if (row[colLetter] !== undefined) {
+                  mapped.fechaAlmacen = row[colLetter];
+                  console.log(`✅ Encontrado fechaAlmacen por índice de columna: ${colLetter}`);
+                }
+              }
+            }
+            
+            // Estrategia 3: Buscar en todas las claves del row con coincidencia parcial
+            if (!mapped.fechaAlmacen && fechaAlmacenColumn) {
+              const fechaAlmacenLower = fechaAlmacenColumn.trim().toLowerCase();
+              for (const [key, value] of Object.entries(row)) {
+                const keyLower = key.trim().toLowerCase();
+                // Buscar coincidencia parcial con las palabras clave
+                if (
+                  keyLower.includes('fecha') && 
+                  (keyLower.includes('almac') || keyLower.includes('entrada')) &&
+                  (keyLower.includes('real') || fechaAlmacenLower.includes('real'))
+                ) {
+                  mapped.fechaAlmacen = value;
+                  console.log(`✅ Encontrado fechaAlmacen por coincidencia parcial: "${key}"`);
+                  break;
+                }
+              }
+            }
+            
+            // Estrategia 4: Buscar cualquier columna que tenga "fecha" y "almacén"
+            if (!mapped.fechaAlmacen && fechaAlmacenColumn) {
+              for (const [key, value] of Object.entries(row)) {
+                const keyLower = key.trim().toLowerCase();
+                if (keyLower.includes('fecha') && (keyLower.includes('almac') || keyLower.includes('almacen'))) {
+                  mapped.fechaAlmacen = value;
+                  console.log(`✅ Encontrado fechaAlmacen por patrón fecha+almacén: "${key}"`);
+                  break;
+                }
+              }
+            }
+            
+            // Estrategia 5: Buscar directamente en el row usando el header original
+            if (!mapped.fechaAlmacen && fechaAlmacenColumn) {
+              // Intentar con el header exacto del headerRow
+              const exactHeader = headerRow.find(h => 
+                h.trim().toLowerCase() === fechaAlmacenColumn.trim().toLowerCase()
+              );
+              if (exactHeader && row[exactHeader] !== undefined) {
+                mapped.fechaAlmacen = row[exactHeader];
+                console.log(`✅ Encontrado fechaAlmacen usando header exacto: "${exactHeader}"`);
+              }
+            }
+          }
+          
+          // Si aún no se encontró pero fechaAlmacenColumn está definida, intentar una última vez
+          if (fechaAlmacenColumn && !mapped.fechaAlmacen && index === 0) {
+            console.log(`⚠️ No se encontró fechaAlmacen en primera fila. Claves disponibles:`, Object.keys(row));
+            console.log(`⚠️ Buscando columna: "${fechaAlmacenColumn}"`);
+            console.log(`⚠️ Header original correspondiente:`, headerRow.find(h => h.trim().toLowerCase() === fechaAlmacenColumn.trim().toLowerCase()));
+          }
+          
           // Clean and convert numeric fields
           mapped.cantidadPedida = cleanNumericValue(mapped.cantidadPedida);
           mapped.pvp = cleanNumericValue(mapped.pvp);
           mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
+          
+          // Format fechaAlmacen if present (permite strings vacíos pero procesa los que tienen valor)
+          if (mapped.fechaAlmacen !== undefined && mapped.fechaAlmacen !== null) {
+            // Si es string vacío, convertir a undefined para que no se incluya
+            if (typeof mapped.fechaAlmacen === 'string' && mapped.fechaAlmacen.trim() === '') {
+              delete mapped.fechaAlmacen;
+            } else {
+              // Intentar formatear la fecha
+              const fechaFormateada = formatDate(mapped.fechaAlmacen);
+              if (fechaFormateada && fechaFormateada.trim() !== '') {
+                mapped.fechaAlmacen = fechaFormateada;
+              } else {
+                // Si no se pudo formatear, eliminar el campo
+                // Pero solo si realmente no es una fecha válida
+                // A veces puede ser un objeto Date que no se formateó bien
+                if (mapped.fechaAlmacen instanceof Date && !isNaN(mapped.fechaAlmacen.getTime())) {
+                  // Es un objeto Date válido, convertir a string ISO
+                  mapped.fechaAlmacen = mapped.fechaAlmacen.toISOString().split('T')[0];
+                } else {
+                  // Realmente no es válido, eliminar
+                  delete mapped.fechaAlmacen;
+                }
+              }
+            }
+          }
           
           return mapped as ProductosData;
         } catch (error) {
@@ -306,6 +687,88 @@ export function processExcelFile(buffer: Buffer): {
       .filter((p: ProductosData | null): p is ProductosData => {
         return p !== null && p.codigoUnico && p.codigoUnico.trim() !== '';
       });
+    
+    // Log productos con fechaAlmacen para debug - verificar TODOS los tipos posibles
+    const productosConFecha = productos.filter(p => {
+      if (!p.fechaAlmacen) return false;
+      // Aceptar strings no vacíos
+      if (typeof p.fechaAlmacen === 'string' && p.fechaAlmacen.trim() !== '') return true;
+      // Aceptar objetos Date válidos
+      if (p.fechaAlmacen instanceof Date && !isNaN(p.fechaAlmacen.getTime())) return true;
+      return false;
+    });
+    
+    console.log(`📅 Productos con fechaAlmacen válida: ${productosConFecha.length} de ${productos.length}`);
+    
+    if (productosConFecha.length > 0) {
+      console.log(`✅ ÉXITO: Se encontraron ${productosConFecha.length} productos con fechaAlmacen válida`);
+      const sampleProduct = productosConFecha[0];
+      console.log(`📅 Sample fechaAlmacen: ${sampleProduct.fechaAlmacen} (tipo: ${typeof sampleProduct.fechaAlmacen})`);
+      console.log(`📅 Sample producto completo:`, JSON.stringify(sampleProduct, null, 2).substring(0, 300));
+      
+      // Verificar que la columna está correctamente mapeada
+      if (fechaAlmacenColumn) {
+        console.log(`✅ Columna "${fechaAlmacenColumn}" está correctamente mapeada y funcionando`);
+      }
+      
+      // Asegurar que todos los productos con fecha tienen el formato correcto (string ISO)
+      productos.forEach(p => {
+        if (p.fechaAlmacen instanceof Date && !isNaN(p.fechaAlmacen.getTime())) {
+          (p as any).fechaAlmacen = p.fechaAlmacen.toISOString().split('T')[0];
+        }
+      });
+    } else {
+      console.log(`❌ ERROR: No se encontraron productos con fechaAlmacen válida.`);
+      console.log(`⚠️ Total productos procesados: ${productos.length}`);
+      
+      // Verificar si hay productos con fechaAlmacen pero vacío
+      const productosConFechaVacia = productos.filter(p => 
+        p.fechaAlmacen !== undefined && 
+        p.fechaAlmacen !== null && 
+        (p.fechaAlmacen === '' || (typeof p.fechaAlmacen === 'string' && p.fechaAlmacen.trim() === ''))
+      );
+      console.log(`⚠️ Productos con fechaAlmacen vacía: ${productosConFechaVacia.length}`);
+      
+      // Verificar si fechaAlmacenColumn fue detectada pero no se mapeó correctamente
+      if (fechaAlmacenColumn) {
+        console.log(`⚠️ PROBLEMA: Se detectó la columna "${fechaAlmacenColumn}" pero no se mapeó correctamente a los productos.`);
+        
+        // Verificar valores en productosRaw
+        const rowsWithValue = productosRaw.filter((row: any) => {
+          const value = row[fechaAlmacenColumn];
+          return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+        });
+        console.log(`📅 Filas en productosRaw con valor en "${fechaAlmacenColumn}": ${rowsWithValue.length} de ${productosRaw.length}`);
+        
+        if (rowsWithValue.length > 0 && rowsWithValue.length <= 5) {
+          console.log(`📅 Ejemplos de valores en productosRaw:`, rowsWithValue.map((r: any) => r[fechaAlmacenColumn]));
+        }
+      } else {
+        console.log(`⚠️ PROBLEMA: No se detectó ninguna columna fechaAlmacen.`);
+        
+        // Mostrar todas las columnas que contienen "fecha" para debug
+        if (productosRaw.length > 0) {
+          const firstRow = productosRaw[0] as any;
+          const actualColumns = Object.keys(firstRow);
+          const fechaColumns = actualColumns.filter(col => col.toLowerCase().includes('fecha'));
+          console.log(`📅 Columnas que contienen "fecha":`, fechaColumns);
+          
+          // Mostrar valores de ejemplo de columnas con "fecha"
+          fechaColumns.forEach(col => {
+            const sampleValue = firstRow[col];
+            console.log(`📅 Columna "${col}": valor ejemplo = "${sampleValue}" (tipo: ${typeof sampleValue})`);
+          });
+        }
+      }
+      
+      // Verificar si el mapeo tiene fechaAlmacen configurado
+      const fechaAlmacenMapping = Object.entries(COLUMN_MAPPINGS.productos).find(([_, val]) => val === 'fechaAlmacen');
+      if (fechaAlmacenMapping) {
+        console.log(`✅ Mapeo configurado: "${fechaAlmacenMapping[0]}" -> fechaAlmacen`);
+      } else {
+        console.log(`❌ NO hay mapeo configurado para fechaAlmacen`);
+      }
+    }
   }
 
   // Process Traspasos sheet

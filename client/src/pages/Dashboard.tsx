@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import FilterSidebar from "@/components/FilterSidebar";
 import DashboardTabs from "@/components/DashboardTabs";
 import ThemeToggle from "@/components/ThemeToggle";
+import Chatbot from "@/components/Chatbot";
 
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -46,6 +47,8 @@ export default function Dashboard() {
           <DashboardTabs />
         </main>
       </div>
+
+      <Chatbot />
     </div>
   );
 }

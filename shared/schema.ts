@@ -56,6 +56,7 @@ export const productosSchema = z.object({
   talla: z.string().optional(),
   color: z.string().optional(),
   temporada: z.string().optional(),
+  fechaAlmacen: z.string().optional(), // Fecha REAL entrada en almacén
 });
 
 export type ProductosData = z.infer<typeof productosSchema>;
