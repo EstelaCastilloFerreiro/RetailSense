@@ -61,8 +61,11 @@ const TIENDAS_A_ELIMINAR = [
 function mapRow(row: any, mapping: Record<string, string>): any {
   const mapped: any = {};
   for (const [excelCol, schemaCol] of Object.entries(mapping)) {
-    if (row[excelCol] !== undefined && row[excelCol] !== null && row[excelCol] !== '') {
-      mapped[schemaCol] = row[excelCol];
+    const value = row[excelCol];
+    // Only include non-empty values
+    if (value !== undefined && value !== null && value !== '') {
+      // Convert to string and trim if it's a string
+      mapped[schemaCol] = typeof value === 'string' ? value.trim() : value;
     }
   }
   return mapped;
@@ -75,24 +78,56 @@ function cleanNumericValue(value: any): number | undefined {
 }
 
 function formatDate(excelDate: any): string {
-  if (!excelDate) return new Date().toISOString();
-  
-  // If it's already a string in DD/MM/YYYY format
-  if (typeof excelDate === 'string') {
-    const parts = excelDate.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts;
-      return new Date(`${year}-${month}-${day}`).toISOString();
+  try {
+    if (!excelDate) return new Date().toISOString().split('T')[0];
+    
+    // If it's already a string in DD/MM/YYYY format
+    if (typeof excelDate === 'string') {
+      // Handle DD/MM/YYYY format
+      const slashParts = excelDate.split('/');
+      if (slashParts.length === 3) {
+        const [day, month, year] = slashParts;
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+      
+      // Handle YYYY-MM-DD format (already ISO)
+      if (excelDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+        return excelDate.split('T')[0]; // Remove time part if present
+      }
     }
+    
+    // If it's an Excel serial number
+    if (typeof excelDate === 'number') {
+      const date = XLSX.SSF.parse_date_code(excelDate);
+      const year = date.y;
+      const month = String(date.m).padStart(2, '0');
+      const day = String(date.d).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // If it's a Date object
+    if (excelDate instanceof Date) {
+      const year = excelDate.getFullYear();
+      const month = String(excelDate.getMonth() + 1).padStart(2, '0');
+      const day = String(excelDate.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Fallback: try to parse as date
+    const parsed = new Date(excelDate);
+    if (!isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    return new Date().toISOString().split('T')[0];
+  } catch (error) {
+    console.error('Error formatting date:', excelDate, error);
+    return new Date().toISOString().split('T')[0];
   }
-  
-  // If it's an Excel serial number
-  if (typeof excelDate === 'number') {
-    const date = XLSX.SSF.parse_date_code(excelDate);
-    return new Date(date.y, date.m - 1, date.d).toISOString();
-  }
-  
-  return new Date(excelDate).toISOString();
 }
 
 export function processExcelFile(buffer: Buffer): {
@@ -131,8 +166,14 @@ export function processExcelFile(buffer: Buffer): {
         
         // Add computed fields
         if (mapped.fechaVenta) {
-          const date = new Date(mapped.fechaVenta);
-          mapped.mes = date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+          try {
+            const date = new Date(mapped.fechaVenta);
+            if (!isNaN(date.getTime())) {
+              mapped.mes = date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+            }
+          } catch (error) {
+            console.error('Error computing mes:', error);
+          }
         }
         
         mapped.esOnline = mapped.tienda ? TIENDAS_ONLINE.includes(mapped.tienda) : false;
@@ -164,7 +205,7 @@ export function processExcelFile(buffer: Buffer): {
         
         return mapped as ProductosData;
       })
-      .filter((p: ProductosData) => p.codigoUnico); // Filter rows without codigo unico
+      .filter((p: ProductosData) => p.codigoUnico && p.codigoUnico.trim() !== ''); // Filter rows without valid codigo unico
   }
 
   // Process Traspasos sheet

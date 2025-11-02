@@ -27,7 +27,7 @@ export const ventasSchema = z.object({
   cantidad: z.number(),
   pvp: z.number().optional(),
   subtotal: z.number(),
-  fechaVenta: z.string(),
+  fechaVenta: z.string().optional(), // Made optional to handle missing dates
   tienda: z.string(),
   codigoTienda: z.string().optional(),
   temporada: z.string().optional(),
@@ -47,7 +47,7 @@ export type VentasData = z.infer<typeof ventasSchema>;
 // Schema for Productos (Products/Purchase) data
 export const productosSchema = z.object({
   act: z.string().optional(),
-  codigoUnico: z.string(),
+  codigoUnico: z.string().optional(), // Made optional to handle missing data
   cantidadPedida: z.number().optional(),
   pvp: z.number().optional(),
   precioCoste: z.number().optional(),

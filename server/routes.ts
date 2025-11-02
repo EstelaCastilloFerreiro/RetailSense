@@ -42,11 +42,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.body.clientId || "demo-client"; // In production, get from auth
       const buffer = req.file.buffer;
 
+      console.log('Processing file:', req.file.originalname);
+
       // Detect column structure
       const { detectedColumns, suggestedMappings } = detectColumnStructure(buffer);
+      console.log('Detected columns:', Object.keys(detectedColumns));
 
       // Process Excel file
       const { ventas, productos, traspasos, sheets } = processExcelFile(buffer);
+      console.log('Processed data:', {
+        ventas: ventas.length,
+        productos: productos.length,
+        traspasos: traspasos.length,
+      });
 
       // Save uploaded file metadata
       const uploadedFile = await storage.saveUploadedFile({
@@ -70,6 +78,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastUpdated: new Date().toISOString(),
       });
 
+      console.log('Upload successful, fileId:', uploadedFile.id);
+
       res.json({
         success: true,
         fileId: uploadedFile.id,
@@ -83,8 +93,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     } catch (error: any) {
-      console.error("Upload error:", error);
-      res.status(500).json({ error: error.message || "Error processing file" });
+      console.error("Upload error details:", error);
+      console.error("Error stack:", error.stack);
+      res.status(500).json({ 
+        error: error.message || "Error processing file",
+        details: error.toString()
+      });
     }
   });
 
