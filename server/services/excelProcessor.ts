@@ -355,6 +355,9 @@ export function processExcelFile(buffer: Buffer): {
   if (productosSheetName) {
     const productosSheet = workbook.Sheets[productosSheetName];
     
+    // Declarar fechaAlmacenColumn al inicio para que esté disponible en todo el scope
+    let fechaAlmacenColumn: string | null = null;
+    
     // Primero obtener las columnas del header para detectar fechaAlmacen antes de convertir
     const range = XLSX.utils.decode_range(productosSheet['!ref'] || 'A1');
     const headerRow: string[] = [];
@@ -379,20 +382,29 @@ export function processExcelFile(buffer: Buffer): {
       cellText: false // No usar valores de texto, usar valores convertidos
     });
     
-    // Log columnas de productos para debug y auto-mapeo mejorado
+    // Siempre detectar fechaAlmacenColumn basándose en los headers, incluso si no hay datos
+    // Esto es crítico porque fechaAlmacenColumn se usa más adelante en el procesamiento
+    let actualColumns: string[] = [];
+    let firstRow: any = null;
+    
     if (productosRaw.length > 0) {
-      const firstRow = productosRaw[0] as any;
-      const actualColumns = Object.keys(firstRow);
+      firstRow = productosRaw[0] as any;
+      actualColumns = Object.keys(firstRow);
       console.log('📦 Productos sheet columns (desde JSON):', actualColumns);
       console.log('📦 Headers originales:', headerRow);
       console.log('📦 Sample productos row:', JSON.stringify(firstRow, null, 2).substring(0, 500));
-      
-      // Buscar columna de fechaAlmacen con múltiples estrategias
-      let fechaAlmacenColumn: string | null = null;
-      
-      // Normalizar headers para comparación (eliminar espacios extra, convertir a minúsculas)
-      const normalizedHeaders = headerRow.map(h => h.trim().toLowerCase());
-      const normalizedActualColumns = actualColumns.map(c => c.trim().toLowerCase());
+    } else {
+      // Si no hay datos, usar los headers como columnas disponibles
+      actualColumns = headerRow.filter(h => h.trim() !== '');
+      console.log('⚠️ No hay datos en productosRaw, usando headers como columnas:', actualColumns);
+    }
+    
+    // Normalizar headers para comparación (eliminar espacios extra, convertir a minúsculas)
+    const normalizedHeaders = headerRow.map(h => h.trim().toLowerCase());
+    const normalizedActualColumns = actualColumns.map(c => c.trim().toLowerCase());
+    
+    // Buscar fechaAlmacenColumn usando múltiples estrategias (SIEMPRE ejecutar, incluso sin datos)
+    if (actualColumns.length > 0 || headerRow.length > 0) {
       
       // Estrategia 1: Buscar coincidencia exacta en el mapeo (comparando normalizado)
       for (const col of actualColumns) {
@@ -538,17 +550,19 @@ export function processExcelFile(buffer: Buffer): {
       // Log final
       if (fechaAlmacenColumn) {
         console.log(`✅ Columna fechaAlmacen detectada y mapeada: "${fechaAlmacenColumn}"`);
-        // Mostrar un ejemplo del valor
-        if (firstRow[fechaAlmacenColumn]) {
+        // Mostrar un ejemplo del valor solo si hay datos
+        if (firstRow && firstRow[fechaAlmacenColumn]) {
           console.log(`📅 Valor de ejemplo: "${firstRow[fechaAlmacenColumn]}" (tipo: ${typeof firstRow[fechaAlmacenColumn]})`);
         }
         
-        // Verificar cuántas filas tienen valores en esta columna
-        const rowsWithValue = productosRaw.filter((row: any) => {
-          const value = row[fechaAlmacenColumn];
-          return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
-        }).length;
-        console.log(`📅 Filas con valores en "${fechaAlmacenColumn}": ${rowsWithValue} de ${productosRaw.length}`);
+        // Verificar cuántas filas tienen valores en esta columna (solo si hay datos)
+        if (productosRaw.length > 0) {
+          const rowsWithValue = productosRaw.filter((row: any) => {
+            const value = row[fechaAlmacenColumn];
+            return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+          }).length;
+          console.log(`📅 Filas con valores en "${fechaAlmacenColumn}": ${rowsWithValue} de ${productosRaw.length}`);
+        }
       } else {
         console.log(`⚠️ NO se encontró columna fechaAlmacen. Columnas disponibles:`, actualColumns);
         const fechaColumns = actualColumns.filter(col => col.toLowerCase().includes('fecha'));
