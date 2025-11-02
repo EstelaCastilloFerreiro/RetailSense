@@ -430,6 +430,385 @@ function generateVisualizationData(
   return [];
 }
 
+// Función para calcular respuestas directamente de los datos
+function calculateDirectResponse(
+  message: string,
+  ventas: VentasData[],
+  productos: ProductosData[],
+  traspasos: TraspasosData[]
+): string | null {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  // Calcular KPIs básicos
+  const totalVentas = ventas.reduce((sum, v) => sum + (v.cantidad || 0), 0);
+  const totalBeneficio = ventas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const devoluciones = ventas.filter(v => (v.cantidad || 0) < 0).reduce((sum, v) => sum + Math.abs(v.cantidad || 0), 0);
+  const ventasPositivas = ventas.filter(v => (v.cantidad || 0) > 0);
+  const ventasNetas = ventasPositivas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const tiendasUnicas = new Set(ventas.map(v => v.tienda)).size;
+  const familiasUnicas = new Set(ventas.map(v => v.descripcionFamilia || v.familia).filter(Boolean)).size;
+  const temporadasUnicas = new Set(ventas.map(v => v.temporada).filter(Boolean)).size;
+  
+  // Calcular tiendas por tipo
+  const tiendasPorNombre = new Set(ventas.map(v => v.tienda));
+  const tiendasOnline = ventas.filter(v => v.esOnline).map(v => v.tienda);
+  const tiendasFisicas = ventas.filter(v => !v.esOnline).map(v => v.tienda);
+  const tiendasOnlineUnicas = new Set(tiendasOnline).size;
+  const tiendasFisicasUnicas = new Set(tiendasFisicas).size;
+  
+  // Calcular ventas por tipo de tienda
+  const ventasOnline = ventas.filter(v => v.esOnline).reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const ventasFisicas = ventas.filter(v => !v.esOnline).reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  
+  // Calcular tasa de devolución
+  const tasaDevolucion = totalVentas > 0 ? ((devoluciones / totalVentas) * 100).toFixed(1) : '0.0';
+  
+  // 1. Consultas sobre cantidad de tiendas
+  if (lowerMessage.includes('cuántas') || lowerMessage.includes('cuantas')) {
+    if (lowerMessage.includes('tienda')) {
+      if (lowerMessage.includes('trucco')) {
+        const tiendasTrucco = Array.from(tiendasPorNombre).filter(t => 
+          t && t.toLowerCase().includes('trucco')
+        );
+        return `Hay ${tiendasTrucco.length} tienda(s) que contienen "trucco" en su nombre: ${tiendasTrucco.join(', ')}.`;
+      }
+      if (lowerMessage.includes('online')) {
+        return `Hay ${tiendasOnlineUnicas} tienda(s) online.`;
+      }
+      if (lowerMessage.includes('física') || lowerMessage.includes('fisica')) {
+        return `Hay ${tiendasFisicasUnicas} tienda(s) físicas.`;
+      }
+      return `Hay ${tiendasUnicas} tienda(s) únicas en total.`;
+    }
+    if (lowerMessage.includes('familia') || lowerMessage.includes('familias')) {
+      return `Hay ${familiasUnicas} familia(s) de productos únicas.`;
+    }
+    if (lowerMessage.includes('temporada') || lowerMessage.includes('temporadas')) {
+      return `Hay ${temporadasUnicas} temporada(s) únicas.`;
+    }
+    if (lowerMessage.includes('producto') || lowerMessage.includes('productos')) {
+      return `Hay ${productos.length} productos únicos registrados.`;
+    }
+  }
+  
+  // 2. Consultas sobre ventas totales
+  if (lowerMessage.includes('ventas') || lowerMessage.includes('venta')) {
+    if (lowerMessage.includes('total') || lowerMessage.includes('cuánto') || lowerMessage.includes('cuanto')) {
+      return `Las ventas totales son ${totalVentas.toLocaleString()} unidades, con un beneficio total de €${totalBeneficio.toLocaleString()}.`;
+    }
+    if (lowerMessage.includes('bruta') || lowerMessage.includes('brutas')) {
+      return `Las ventas brutas son ${totalVentas.toLocaleString()} unidades, con un beneficio de €${totalBeneficio.toLocaleString()}.`;
+    }
+    if (lowerMessage.includes('neta') || lowerMessage.includes('netas')) {
+      return `Las ventas netas son ${totalVentas.toLocaleString()} unidades, con un beneficio de €${ventasNetas.toLocaleString()}.`;
+    }
+    if (lowerMessage.includes('online')) {
+      const unidadesOnline = ventas.filter(v => v.esOnline).reduce((sum, v) => sum + (v.cantidad || 0), 0);
+      return `Las ventas online son ${unidadesOnline.toLocaleString()} unidades, con un beneficio de €${ventasOnline.toLocaleString()}.`;
+    }
+    if (lowerMessage.includes('física') || lowerMessage.includes('fisica')) {
+      const unidadesFisicas = ventas.filter(v => !v.esOnline).reduce((sum, v) => sum + (v.cantidad || 0), 0);
+      return `Las ventas físicas son ${unidadesFisicas.toLocaleString()} unidades, con un beneficio de €${ventasFisicas.toLocaleString()}.`;
+    }
+  }
+  
+  // 3. Consultas sobre devoluciones
+  if (lowerMessage.includes('devolución') || lowerMessage.includes('devoluciones') || lowerMessage.includes('devolucion')) {
+    if (lowerMessage.includes('total') || lowerMessage.includes('cuánto') || lowerMessage.includes('cuanto')) {
+      return `Las devoluciones totales son ${devoluciones.toLocaleString()} unidades. La tasa de devolución es del ${tasaDevolucion}%.`;
+    }
+    if (lowerMessage.includes('tasa') || lowerMessage.includes('porcentaje')) {
+      return `La tasa de devolución es del ${tasaDevolucion}%.`;
+    }
+  }
+  
+  // 4. Consultas sobre top/mejor/peor
+  if (lowerMessage.includes('mejor') || lowerMessage.includes('top') || lowerMessage.includes('más') || lowerMessage.includes('mas')) {
+    if (lowerMessage.includes('tienda')) {
+      const tiendasMap = new Map<string, { cantidad: number; beneficio: number }>();
+      ventas.forEach(v => {
+        const tienda = v.tienda || '';
+        if (!tiendasMap.has(tienda)) {
+          tiendasMap.set(tienda, { cantidad: 0, beneficio: 0 });
+        }
+        const data = tiendasMap.get(tienda)!;
+        data.cantidad += v.cantidad || 0;
+        data.beneficio += v.subtotal || 0;
+      });
+      const topTiendas = Array.from(tiendasMap.entries())
+        .map(([tienda, data]) => ({ tienda, ...data }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5);
+      
+      if (lowerMessage.includes('beneficio') || lowerMessage.includes('venta')) {
+        const topPorBeneficio = topTiendas.sort((a, b) => b.beneficio - a.beneficio).slice(0, 3);
+        return `Las ${topPorBeneficio.length} tiendas con más beneficio son: ${topPorBeneficio.map(t => `${t.tienda} (€${t.beneficio.toLocaleString()})`).join(', ')}.`;
+      }
+      return `Las ${topTiendas.length} tiendas con más ventas son: ${topTiendas.map(t => `${t.tienda} (${t.cantidad.toLocaleString()} unidades)`).join(', ')}.`;
+    }
+    if (lowerMessage.includes('familia') || lowerMessage.includes('familias')) {
+      const familiasMap = new Map<string, { cantidad: number; beneficio: number }>();
+      ventas.forEach(v => {
+        const familia = v.descripcionFamilia || v.familia || '';
+        if (!familiasMap.has(familia)) {
+          familiasMap.set(familia, { cantidad: 0, beneficio: 0 });
+        }
+        const data = familiasMap.get(familia)!;
+        data.cantidad += v.cantidad || 0;
+        data.beneficio += v.subtotal || 0;
+      });
+      const topFamilias = Array.from(familiasMap.entries())
+        .map(([familia, data]) => ({ familia, ...data }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5);
+      return `Las ${topFamilias.length} familias con más ventas son: ${topFamilias.map(f => `${f.familia} (${f.cantidad.toLocaleString()} unidades)`).join(', ')}.`;
+    }
+    if (lowerMessage.includes('producto') || lowerMessage.includes('productos')) {
+      const productosMap = new Map<string, { cantidad: number; beneficio: number }>();
+      ventas.forEach(v => {
+        const producto = v.codigoUnico || v.act || '';
+        if (!productosMap.has(producto)) {
+          productosMap.set(producto, { cantidad: 0, beneficio: 0 });
+        }
+        const data = productosMap.get(producto)!;
+        data.cantidad += v.cantidad || 0;
+        data.beneficio += v.subtotal || 0;
+      });
+      const topProductos = Array.from(productosMap.entries())
+        .map(([producto, data]) => ({ producto, ...data }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5);
+      return `Los ${topProductos.length} productos con más ventas son: ${topProductos.map(p => `${p.producto} (${p.cantidad.toLocaleString()} unidades)`).join(', ')}.`;
+    }
+  }
+  
+  // 5. Consultas sobre peor/menor
+  if (lowerMessage.includes('peor') || lowerMessage.includes('menor') || lowerMessage.includes('menos')) {
+    if (lowerMessage.includes('tienda')) {
+      const tiendasMap = new Map<string, { cantidad: number; beneficio: number }>();
+      ventas.forEach(v => {
+        const tienda = v.tienda || '';
+        if (!tiendasMap.has(tienda)) {
+          tiendasMap.set(tienda, { cantidad: 0, beneficio: 0 });
+        }
+        const data = tiendasMap.get(tienda)!;
+        data.cantidad += v.cantidad || 0;
+        data.beneficio += v.subtotal || 0;
+      });
+      const peoresTiendas = Array.from(tiendasMap.entries())
+        .map(([tienda, data]) => ({ tienda, ...data }))
+        .sort((a, b) => a.cantidad - b.cantidad)
+        .slice(0, 3);
+      return `Las ${peoresTiendas.length} tiendas con menos ventas son: ${peoresTiendas.map(t => `${t.tienda} (${t.cantidad.toLocaleString()} unidades)`).join(', ')}.`;
+    }
+  }
+  
+  // 6. Consultas sobre promedio
+  if (lowerMessage.includes('promedio') || lowerMessage.includes('media')) {
+    if (lowerMessage.includes('venta') || lowerMessage.includes('tienda')) {
+      const promedioPorTienda = tiendasUnicas > 0 ? (totalVentas / tiendasUnicas).toFixed(0) : '0';
+      return `El promedio de ventas por tienda es de ${promedioPorTienda} unidades.`;
+    }
+  }
+  
+  // 7. Consultas sobre comparaciones
+  if (lowerMessage.includes('comparar') || lowerMessage.includes('vs') || lowerMessage.includes('versus')) {
+    if (lowerMessage.includes('online') && lowerMessage.includes('física')) {
+      const porcentajeOnline = totalVentas > 0 ? ((ventasOnline / totalVentas) * 100).toFixed(1) : '0';
+      const porcentajeFisica = totalVentas > 0 ? ((ventasFisicas / totalVentas) * 100).toFixed(1) : '0';
+      return `Comparación de ventas: Online ${porcentajeOnline}% (€${ventasOnline.toLocaleString()}) vs Física ${porcentajeFisica}% (€${ventasFisicas.toLocaleString()}).`;
+    }
+  }
+  
+  // 8. Consultas específicas sobre tiendas
+  const tiendaMatch = lowerMessage.match(/tienda[s]?\s+(?:que\s+)?(?:contiene[n]?|tiene[n]?|tienen|tiene)\s+["']?([^"']+)["']?/i);
+  if (tiendaMatch) {
+    const busqueda = tiendaMatch[1]?.toLowerCase();
+    if (busqueda) {
+      const tiendasEncontradas = Array.from(tiendasPorNombre).filter(t => 
+        t && t.toLowerCase().includes(busqueda)
+      );
+      if (tiendasEncontradas.length > 0) {
+        return `Encontré ${tiendasEncontradas.length} tienda(s) que contienen "${busqueda}": ${tiendasEncontradas.join(', ')}.`;
+      }
+      return `No encontré ninguna tienda que contenga "${busqueda}".`;
+    }
+  }
+  
+  return null;
+}
+
+// Función para calcular estadísticas detalladas para contexto de OpenAI
+function calculateDetailedStats(
+  ventas: VentasData[],
+  productos: ProductosData[],
+  traspasos: TraspasosData[]
+) {
+  // KPIs básicos
+  const totalVentas = ventas.reduce((sum, v) => sum + (v.cantidad || 0), 0);
+  const totalBeneficio = ventas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const devoluciones = ventas.filter(v => (v.cantidad || 0) < 0).reduce((sum, v) => sum + Math.abs(v.cantidad || 0), 0);
+  const ventasPositivas = ventas.filter(v => (v.cantidad || 0) > 0);
+  const ventasNetas = ventasPositivas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  
+  // Conteos únicos
+  const tiendasUnicas = new Set(ventas.map(v => v.tienda)).size;
+  const familiasUnicas = new Set(ventas.map(v => v.descripcionFamilia || v.familia).filter(Boolean)).size;
+  const temporadasUnicas = new Set(ventas.map(v => v.temporada).filter(Boolean)).size;
+  const tallasUnicas = new Set(ventas.map(v => v.talla).filter(Boolean)).size;
+  const coloresUnicos = new Set(ventas.map(v => v.color).filter(Boolean)).size;
+  
+  // Ventas por tipo de tienda
+  const ventasOnline = ventas.filter(v => v.esOnline).reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const unidadesOnline = ventas.filter(v => v.esOnline).reduce((sum, v) => sum + (v.cantidad || 0), 0);
+  const ventasFisicas = ventas.filter(v => !v.esOnline).reduce((sum, v) => sum + (v.subtotal || 0), 0);
+  const unidadesFisicas = ventas.filter(v => !v.esOnline).reduce((sum, v) => sum + (v.cantidad || 0), 0);
+  const tiendasOnlineUnicas = new Set(ventas.filter(v => v.esOnline).map(v => v.tienda)).size;
+  const tiendasFisicasUnicas = new Set(ventas.filter(v => !v.esOnline).map(v => v.tienda)).size;
+  
+  // Tasa de devolución
+  const tasaDevolucion = totalVentas > 0 ? ((devoluciones / totalVentas) * 100).toFixed(1) : '0.0';
+  
+  // Top tiendas
+  const tiendasMap = new Map<string, { cantidad: number; beneficio: number; transacciones: number }>();
+  ventas.forEach(v => {
+    const tienda = v.tienda || '';
+    if (!tiendasMap.has(tienda)) {
+      tiendasMap.set(tienda, { cantidad: 0, beneficio: 0, transacciones: 0 });
+    }
+    const data = tiendasMap.get(tienda)!;
+    data.cantidad += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+    data.transacciones += 1;
+  });
+  const topTiendas = Array.from(tiendasMap.entries())
+    .map(([tienda, data]) => ({ tienda, ...data }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+  const peoresTiendas = Array.from(tiendasMap.entries())
+    .map(([tienda, data]) => ({ tienda, ...data }))
+    .sort((a, b) => a.cantidad - b.cantidad)
+    .slice(0, 5);
+  
+  // Top familias
+  const familiasMap = new Map<string, { cantidad: number; beneficio: number }>();
+  ventas.forEach(v => {
+    const familia = v.descripcionFamilia || v.familia || '';
+    if (!familiasMap.has(familia)) {
+      familiasMap.set(familia, { cantidad: 0, beneficio: 0 });
+    }
+    const data = familiasMap.get(familia)!;
+    data.cantidad += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+  });
+  const topFamilias = Array.from(familiasMap.entries())
+    .map(([familia, data]) => ({ familia, ...data }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+  
+  // Top temporadas
+  const temporadasMap = new Map<string, { cantidad: number; beneficio: number }>();
+  ventas.forEach(v => {
+    const temporada = v.temporada || '';
+    if (!temporadasMap.has(temporada)) {
+      temporadasMap.set(temporada, { cantidad: 0, beneficio: 0 });
+    }
+    const data = temporadasMap.get(temporada)!;
+    data.cantidad += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+  });
+  const topTemporadas = Array.from(temporadasMap.entries())
+    .map(([temporada, data]) => ({ temporada, ...data }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+  
+  // Top tallas
+  const tallasMap = new Map<string, { cantidad: number; beneficio: number }>();
+  ventas.forEach(v => {
+    const talla = v.talla || '';
+    if (!tallasMap.has(talla)) {
+      tallasMap.set(talla, { cantidad: 0, beneficio: 0 });
+    }
+    const data = tallasMap.get(talla)!;
+    data.cantidad += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+  });
+  const topTallas = Array.from(tallasMap.entries())
+    .map(([talla, data]) => ({ talla, ...data }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+  
+  // Top productos
+  const productosMap = new Map<string, { cantidad: number; beneficio: number }>();
+  ventas.forEach(v => {
+    const producto = v.codigoUnico || v.act || '';
+    if (!productosMap.has(producto)) {
+      productosMap.set(producto, { cantidad: 0, beneficio: 0 });
+    }
+    const data = productosMap.get(producto)!;
+    data.cantidad += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+  });
+  const topProductos = Array.from(productosMap.entries())
+    .map(([producto, data]) => ({ producto, ...data }))
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+  
+  // Estadísticas de productos
+  const totalProductosPedidos = productos.reduce((sum, p) => sum + (p.cantidadPedida || 0), 0);
+  const productosConPrecio = productos.filter(p => p.precioCoste && p.precioCoste > 0);
+  const precioPromedioCosto = productosConPrecio.length > 0 
+    ? (productosConPrecio.reduce((sum, p) => sum + (p.precioCoste || 0), 0) / productosConPrecio.length).toFixed(2)
+    : '0.00';
+  
+  // Estadísticas de traspasos
+  const totalTraspasos = traspasos.reduce((sum, t) => sum + (t.enviado || 0), 0);
+  const tiendasConTraspasos = new Set(traspasos.map(t => t.tienda).filter(Boolean)).size;
+  
+  // Promedios
+  const promedioPorTienda = tiendasUnicas > 0 ? (totalVentas / tiendasUnicas).toFixed(0) : '0';
+  const promedioBeneficioPorTienda = tiendasUnicas > 0 ? (totalBeneficio / tiendasUnicas).toFixed(2) : '0.00';
+  
+  // Lista de tiendas
+  const todasTiendas = Array.from(new Set(ventas.map(v => v.tienda))).sort();
+  const tiendasTrucco = todasTiendas.filter(t => t && t.toLowerCase().includes('trucco'));
+  const familiasList = Array.from(new Set(ventas.map(v => v.descripcionFamilia || v.familia).filter(Boolean))).sort();
+  
+  return {
+    totalVentas,
+    totalBeneficio,
+    devoluciones,
+    ventasNetas,
+    tiendasUnicas,
+    familiasUnicas,
+    temporadasUnicas,
+    tallasUnicas,
+    coloresUnicos,
+    ventasOnline,
+    unidadesOnline,
+    ventasFisicas,
+    unidadesFisicas,
+    tiendasOnlineUnicas,
+    tiendasFisicasUnicas,
+    tasaDevolucion,
+    topTiendas,
+    peoresTiendas,
+    topFamilias,
+    topTemporadas,
+    topTallas,
+    topProductos,
+    totalProductosPedidos,
+    precioPromedioCosto,
+    totalTraspasos,
+    tiendasConTraspasos,
+    promedioPorTienda,
+    promedioBeneficioPorTienda,
+    todasTiendas,
+    tiendasTrucco,
+    familiasList
+  };
+}
+
 // Función para obtener respuesta conversacional de OpenAI
 async function getConversationalResponse(
   message: string,
@@ -437,61 +816,105 @@ async function getConversationalResponse(
   productos: ProductosData[],
   traspasos: TraspasosData[]
 ): Promise<string | null> {
+  // Primero intentar calcular respuesta directa
+  const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
+  if (directResponse) {
+    return directResponse;
+  }
+  
   if (!openai) {
     return null;
   }
 
   try {
-    // Calcular algunos KPIs básicos para contexto
-    const totalVentas = ventas.reduce((sum, v) => sum + (v.cantidad || 0), 0);
-    const totalBeneficio = ventas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
-    const tiendasUnicas = new Set(ventas.map(v => v.tienda)).size;
-    const familiasUnicas = new Set(ventas.map(v => v.familia || v.descripcionFamilia)).size;
-    
-    // Calcular datos específicos que pueden ser útiles
-    const tiendasPorNombre: Record<string, number> = {};
-    ventas.forEach(v => {
-      const tienda = v.tienda || '';
-      if (tienda) {
-        tiendasPorNombre[tienda] = (tiendasPorNombre[tienda] || 0) + 1;
-      }
-    });
-    
-    // Buscar tiendas que contengan "trucco" (case insensitive)
-    const tiendasTrucco = Object.keys(tiendasPorNombre).filter(t => 
-      t.toLowerCase().includes('trucco')
-    );
-    
-    const familiasList = Array.from(new Set(ventas.map(v => v.descripcionFamilia || v.familia).filter(Boolean)));
-
-    // Si la pregunta es específica sobre tiendas Trucco, calcular directamente
-    const lowerMessage = message.toLowerCase();
-    if (lowerMessage.includes('trucco') && (lowerMessage.includes('cuántas') || lowerMessage.includes('cuantas'))) {
-      return `Hay ${tiendasTrucco.length} tienda(s) que contienen "trucco" en su nombre: ${tiendasTrucco.join(', ')}.`;
-    }
+    // Calcular estadísticas detalladas
+    const stats = calculateDetailedStats(ventas, productos, traspasos);
 
     const systemPrompt = `Eres un asistente experto en análisis de datos de retail para la aplicación RetailSense. 
-Tu función es ayudar a los usuarios a entender sus datos de ventas, productos y traspasos.
+Tu función es ayudar a los usuarios a entender sus datos de ventas, productos y traspasos, respondiendo CUALQUIER tipo de pregunta o consulta sobre los datos disponibles.
 
 Datos disponibles en el sistema:
+📊 RESUMEN GENERAL:
 - Total de registros de ventas: ${ventas.length}
 - Total de productos: ${productos.length}
 - Total de traspasos: ${traspasos.length}
-- Total unidades vendidas: ${totalVentas.toLocaleString()}
-- Total beneficio: €${totalBeneficio.toLocaleString()}
-- Número de tiendas únicas: ${tiendasUnicas}
-- Número de familias únicas: ${familiasUnicas}
-${tiendasTrucco.length > 0 ? `- Tiendas que contienen "trucco": ${tiendasTrucco.length} (${tiendasTrucco.slice(0, 10).join(', ')})` : ''}
+- Total unidades vendidas: ${stats.totalVentas.toLocaleString()}
+- Total beneficio: €${stats.totalBeneficio.toLocaleString()}
+- Ventas netas: €${stats.ventasNetas.toLocaleString()}
+- Devoluciones: ${stats.devoluciones.toLocaleString()} unidades
+- Tasa de devolución: ${stats.tasaDevolucion}%
+- Promedio de ventas por tienda: ${stats.promedioPorTienda} unidades
+- Promedio de beneficio por tienda: €${stats.promedioBeneficioPorTienda}
+
+🏪 TIENDAS:
+- Número de tiendas únicas: ${stats.tiendasUnicas}
+- Tiendas online: ${stats.tiendasOnlineUnicas}
+- Tiendas físicas: ${stats.tiendasFisicasUnicas}
+- Ventas online: ${stats.unidadesOnline.toLocaleString()} unidades (€${stats.ventasOnline.toLocaleString()})
+- Ventas físicas: ${stats.unidadesFisicas.toLocaleString()} unidades (€${stats.ventasFisicas.toLocaleString()})
+${stats.tiendasTrucco.length > 0 ? `- Tiendas que contienen "trucco": ${stats.tiendasTrucco.length} (${stats.tiendasTrucco.slice(0, 10).join(', ')})` : ''}
+
+Top 10 tiendas por ventas:
+${stats.topTiendas.map((t, i) => `${i + 1}. ${t.tienda}: ${t.cantidad.toLocaleString()} unidades, €${t.beneficio.toLocaleString()} (${t.transacciones} transacciones)`).join('\n')}
+
+Top 5 tiendas con menos ventas:
+${stats.peoresTiendas.map((t, i) => `${i + 1}. ${t.tienda}: ${t.cantidad.toLocaleString()} unidades, €${t.beneficio.toLocaleString()}`).join('\n')}
+
+👔 FAMILIAS Y PRODUCTOS:
+- Número de familias únicas: ${stats.familiasUnicas}
+- Número de tallas únicas: ${stats.tallasUnicas}
+- Número de colores únicos: ${stats.coloresUnicos}
+- Total productos pedidos: ${stats.totalProductosPedidos.toLocaleString()}
+- Precio promedio de coste: €${stats.precioPromedioCosto}
+
+Top 10 familias por ventas:
+${stats.topFamilias.map((f, i) => `${i + 1}. ${f.familia}: ${f.cantidad.toLocaleString()} unidades, €${f.beneficio.toLocaleString()}`).join('\n')}
+
+Top 10 productos por ventas:
+${stats.topProductos.map((p, i) => `${i + 1}. ${p.producto}: ${p.cantidad.toLocaleString()} unidades, €${p.beneficio.toLocaleString()}`).join('\n')}
+
+Top 10 tallas por ventas:
+${stats.topTallas.map((t, i) => `${i + 1}. ${t.talla}: ${t.cantidad.toLocaleString()} unidades, €${t.beneficio.toLocaleString()}`).join('\n')}
+
+📅 TEMPORADAS:
+- Número de temporadas únicas: ${stats.temporadasUnicas}
+
+Top 10 temporadas por ventas:
+${stats.topTemporadas.map((t, i) => `${i + 1}. ${t.temporada}: ${t.cantidad.toLocaleString()} unidades, €${t.beneficio.toLocaleString()}`).join('\n')}
+
+📦 TRASPASOS:
+- Total unidades traspasadas: ${stats.totalTraspasos.toLocaleString()}
+- Tiendas con traspasos: ${stats.tiendasConTraspasos}
 
 Campos disponibles en ventas:
-- temporada, familia, descripcionFamilia, tienda, talla, fechaVenta, cantidad, subtotal
-- tipoTienda (Física/Online)
+- temporada, familia, descripcionFamilia, tienda, talla, fechaVenta, cantidad, subtotal, pvp, precioCoste
+- tipoTienda (Física/Online mediante campo esOnline)
+- color, codigoUnico, act
 
-Responde de manera natural, conversacional y útil en español. Si el usuario pregunta sobre datos específicos, proporciona la información exacta basándote en los datos disponibles.
+Campos disponibles en productos:
+- codigoUnico, act, cantidadPedida, precioCoste, pvp, fechaAlmacen, familia, talla, color
 
-IMPORTANTE: Responde SOLO con texto natural. NO uses formato JSON ni estructuras de código. Solo texto conversacional.
+Campos disponibles en traspasos:
+- codigoUnico, act, enviado, tienda, fechaEnviado
 
-Sé amigable, profesional y útil.`;
+INSTRUCCIONES IMPORTANTES:
+1. Responde CUALQUIER tipo de pregunta o consulta sobre los datos disponibles
+2. Puedes responder preguntas sobre:
+   - KPIs y métricas generales
+   - Comparaciones (tiendas, familias, temporadas, etc.)
+   - Análisis de rendimiento
+   - Preguntas específicas sobre tiendas, productos, familias, temporadas
+   - Estadísticas y promedios
+   - Tendencias y patrones
+   - Recomendaciones basadas en los datos
+   - Cualquier otra consulta relacionada con los datos de retail
+3. Usa los datos calculados arriba para responder preguntas específicas
+4. Si el usuario pregunta sobre algo específico (ej: "ventas de la tienda X"), calcula y proporciona la información exacta
+5. Responde de manera natural, conversacional y útil en español
+6. NO uses formato JSON ni estructuras de código. Solo texto conversacional
+7. Sé amigable, profesional y útil
+8. Si no tienes suficiente información para responder completamente, indica lo que SÍ puedes proporcionar basándote en los datos disponibles
+9. Si el usuario hace una pregunta muy general, proporciona un resumen útil de los datos más relevantes`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -500,7 +923,7 @@ Sé amigable, profesional y útil.`;
         { role: "user", content: message },
       ],
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 1500,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -514,17 +937,10 @@ Sé amigable, profesional y útil.`;
       type: error.type
     });
     
-    // Si el error menciona "pattern", puede ser un problema con la API key o configuración
-    if (error.message?.includes("pattern")) {
-      console.error("⚠️ Error de patrón detectado. Esto puede indicar un problema con la configuración de OpenAI.");
-    }
-    
-    // Intentar responder con datos calculados si es posible
-    const lowerMessage = message.toLowerCase();
-    if (lowerMessage.includes('trucco') && (lowerMessage.includes('cuántas') || lowerMessage.includes('cuantas'))) {
-      const tiendasTrucco = Array.from(new Set(ventas.map(v => v.tienda)))
-        .filter(t => t && t.toLowerCase().includes('trucco'));
-      return `Hay ${tiendasTrucco.length} tienda(s) que contienen "trucco" en su nombre: ${tiendasTrucco.join(', ')}.`;
+    // Si falla OpenAI, intentar calcular respuesta directa
+    const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
+    if (directResponse) {
+      return directResponse;
     }
     
     return null;
@@ -615,18 +1031,24 @@ export async function processChatbotRequest(
         type: error.type
       });
       
-      // Si falla OpenAI pero es una pregunta simple, intentar calcular directamente
-      const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('trucco') && (lowerMessage.includes('cuántas') || lowerMessage.includes('cuantas'))) {
-        const tiendasTrucco = Array.from(new Set(ventas.map(v => v.tienda)))
-          .filter(t => t && t.toLowerCase().includes('trucco'));
+      // Si falla OpenAI, intentar calcular respuesta directa
+      const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
+      if (directResponse) {
         return {
-          message: `Hay ${tiendasTrucco.length} tienda(s) que contienen "trucco" en su nombre: ${tiendasTrucco.join(', ')}.`,
+          message: directResponse,
         };
       }
       
       // Continuar con fallback si OpenAI falla
     }
+  }
+
+  // Fallback: Si no hay OpenAI o falló, intentar calcular respuesta directa primero
+  const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
+  if (directResponse) {
+    return {
+      message: directResponse,
+    };
   }
 
   // Fallback: Si no hay OpenAI o falló, intentar generar visualización si la pide
