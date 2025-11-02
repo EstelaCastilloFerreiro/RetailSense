@@ -70,12 +70,63 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  const defaultPort = parseInt(process.env.PORT || '5000', 10);
+  const alternativePorts = [5173, 3000, 8080, 8000];
+  const allPorts = [defaultPort, ...alternativePorts];
+  const hosts = ["127.0.0.1", "0.0.0.0"]; // Try localhost first on macOS
+  
+  let serverStarted = false;
+  
+  for (const port of allPorts) {
+    if (serverStarted) break;
+    
+    for (const host of hosts) {
+      if (serverStarted) break;
+      
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (!serverStarted) {
+              server.removeAllListeners('listening');
+              server.removeAllListeners('error');
+              reject(new Error('Timeout starting server'));
+            }
+          }, 2000);
+          
+          server.once('listening', () => {
+            clearTimeout(timeout);
+            log(`✓ Server running on http://${host === "0.0.0.0" ? "localhost" : host}:${port}`);
+            serverStarted = true;
+            resolve();
+          });
+          
+          server.once('error', (err: NodeJS.ErrnoException) => {
+            clearTimeout(timeout);
+            server.removeAllListeners('listening');
+            
+            // If port/host issue, continue to next
+            if (err.code === 'EADDRINUSE' || err.code === 'ENOTSUP') {
+              resolve(); // Resolve to continue loop
+            } else {
+              reject(err); // Real error, reject
+            }
+          });
+          
+          server.listen(port, host);
+        });
+        
+        if (serverStarted) break; // Success!
+      } catch (error: any) {
+        // Continue to next port/host
+        if (serverStarted) break;
+      }
+    }
+    
+    if (serverStarted) break;
+  }
+  
+  if (!serverStarted) {
+    log(`✗ Failed to start server on any available port`);
+    process.exit(1);
+  }
 })();

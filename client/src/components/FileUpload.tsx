@@ -66,14 +66,31 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
       setUploadProgress(100);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error uploading file');
+        let errorMessage = 'Error uploading file';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.fullMessage || errorData.message || errorMessage;
+          console.error('Server error response:', errorData);
+        } catch (e) {
+          errorMessage = `Error ${response.status}: ${response.statusText}`;
+          console.error('Failed to parse error response:', e);
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       
+      // Validate response has required fields
+      if (!data.fileId) {
+        throw new Error('Respuesta del servidor inválida: falta fileId');
+      }
+      
+      if (!data.recordCounts) {
+        throw new Error('Respuesta del servidor inválida: falta recordCounts');
+      }
+      
       setUploadedFile({
-        name: data.fileName,
+        name: data.fileName || 'Archivo cargado',
         records: data.recordCounts,
       });
 
@@ -82,18 +99,24 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
 
       toast({
         title: "Archivo procesado correctamente",
-        description: `${data.recordCounts.ventas} ventas, ${data.recordCounts.productos} productos, ${data.recordCounts.traspasos} traspasos`,
+        description: `${data.recordCounts.ventas || 0} ventas, ${data.recordCounts.productos || 0} productos, ${data.recordCounts.traspasos || 0} traspasos`,
       });
 
       onUploadComplete?.();
 
     } catch (error: any) {
       console.error('Upload error:', error);
+      const errorMessage = error.message || "Por favor, intenta de nuevo. Verifica que el archivo sea válido.";
+      
       toast({
         title: "Error al procesar archivo",
-        description: error.message || "Por favor, intenta de nuevo",
+        description: errorMessage,
         variant: "destructive",
       });
+      
+      // Reset state on error
+      setUploadProgress(0);
+      setUploadedFile(null);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {

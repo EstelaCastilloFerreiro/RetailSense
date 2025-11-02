@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import multer from "multer";
+import multer, { type FileFilterCallback } from "multer";
+import type { Request } from "express";
 import { storage } from "./storage";
 import { processExcelFile, detectColumnStructure } from "./services/excelProcessor";
 import { calculateDashboardData } from "./services/kpiCalculator";
@@ -17,7 +18,7 @@ const upload = multer({
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
     const allowedMimes = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
       'application/vnd.ms-excel', // xls
@@ -46,7 +47,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { detectedColumns, suggestedMappings } = detectColumnStructure(buffer);
 
       // Process Excel file
-      const { ventas, productos, traspasos, sheets } = processExcelFile(buffer);
+      let ventas, productos, traspasos, sheets;
+      try {
+        const result = processExcelFile(buffer);
+        ventas = result.ventas;
+        productos = result.productos;
+        traspasos = result.traspasos;
+        sheets = result.sheets;
+        
+        // Ensure we have at least some data
+        if (ventas.length === 0 && productos.length === 0 && traspasos.length === 0) {
+          return res.status(400).json({ 
+            error: "No se encontraron datos válidos en el archivo. Verifique que el archivo contenga hojas con datos de Ventas, Compra o Traspasos." 
+          });
+        }
+      } catch (processError: any) {
+        console.error("Error procesando archivo Excel:", processError);
+        return res.status(500).json({ 
+          error: processError.message || "Error al procesar el archivo Excel",
+          fullMessage: processError.message
+        });
+      }
 
       // Save uploaded file metadata
       const uploadedFile = await storage.saveUploadedFile({
@@ -63,28 +84,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.saveTraspasosData(uploadedFile.id, traspasos),
       ]);
 
-      // Save/update client config
-      await storage.saveClientConfig({
-        clientId,
-        columnMappings: suggestedMappings,
-        lastUpdated: new Date().toISOString(),
-      });
+      // Save/update client config - validate it first
+      try {
+        const configToSave = {
+          clientId,
+          columnMappings: suggestedMappings,
+          lastUpdated: new Date().toISOString(),
+        };
+        
+        // Validate the config before saving
+        const { clientConfigSchema } = await import('@shared/schema');
+        const configValidation = clientConfigSchema.safeParse(configToSave);
+        
+        if (!configValidation.success) {
+          console.warn('⚠️  Advertencia: Configuración del cliente no válida:', configValidation.error.errors);
+          // Try to fix: ensure columnMappings is properly structured
+          const fixedMappings: Record<string, Record<string, string>> = {};
+          for (const [sheet, mappings] of Object.entries(suggestedMappings)) {
+            if (mappings && typeof mappings === 'object') {
+              fixedMappings[sheet] = mappings as Record<string, string>;
+            }
+          }
+          await storage.saveClientConfig({
+            clientId,
+            columnMappings: fixedMappings,
+            lastUpdated: new Date().toISOString(),
+          });
+        } else {
+          await storage.saveClientConfig(configValidation.data);
+        }
+      } catch (configError: any) {
+        console.error('Error guardando configuración del cliente:', configError);
+        // Continue anyway - config is optional
+      }
 
-      res.json({
+      // Ensure all required fields are present
+      const response = {
         success: true,
         fileId: uploadedFile.id,
-        fileName: uploadedFile.fileName,
-        sheets,
-        detectedColumns,
+        fileName: uploadedFile.fileName || req.file.originalname,
+        sheets: sheets || [],
+        detectedColumns: detectedColumns || {},
         recordCounts: {
-          ventas: ventas.length,
-          productos: productos.length,
-          traspasos: traspasos.length,
+          ventas: ventas?.length || 0,
+          productos: productos?.length || 0,
+          traspasos: traspasos?.length || 0,
         },
-      });
+      };
+      
+      res.json(response);
     } catch (error: any) {
       console.error("Upload error:", error);
-      res.status(500).json({ error: error.message || "Error processing file" });
+      const errorMessage = error.message || "Error procesando archivo";
+      console.error("Error details:", {
+        message: errorMessage,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // Extract more detailed error information
+      let detailedError = errorMessage;
+      if (error.errors && Array.isArray(error.errors)) {
+        // Zod validation errors
+        const firstError = error.errors[0];
+        if (firstError) {
+          const field = firstError.path?.join('.') || 'desconocido';
+          detailedError = `Error en campo "${field}": ${firstError.message}`;
+        }
+      }
+      
+      res.status(500).json({ 
+        error: detailedError,
+        fullMessage: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   });
 
