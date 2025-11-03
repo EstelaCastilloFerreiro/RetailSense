@@ -51,21 +51,25 @@ export default function Forecasting() {
   const { fileId } = useData();
   const { toast } = useToast();
 
-  const { data: filters } = useQuery({
+  const { data: filters } = useQuery<{
+    temporadas: string[];
+    familias: string[];
+    tiendas: string[];
+  }>({
     queryKey: ["/api/filters", fileId],
     enabled: !!fileId,
   });
 
-  const { data: forecastJobs, isLoading: jobsLoading } = useQuery({
+  const { data: forecastJobs, isLoading: jobsLoading } = useQuery<any[]>({
     queryKey: ["/api/forecast/jobs", fileId],
     enabled: !!fileId,
   });
 
-  const latestJob = forecastJobs?.[0];
+  const latestJob = Array.isArray(forecastJobs) && forecastJobs.length > 0 ? forecastJobs[0] : null;
 
   const runForecastMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/forecast/run`, {
+      const response = await fetch(`/api/forecast/run`, {
         method: "POST",
         body: JSON.stringify({
           fileId,
@@ -79,6 +83,8 @@ export default function Forecasting() {
         }),
         headers: { "Content-Type": "application/json" },
       });
+      if (!response.ok) throw new Error("Failed to run forecast");
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/forecast/jobs", fileId] });
@@ -104,8 +110,8 @@ export default function Forecasting() {
   const summary = latestJob?.results?.summary;
 
   const demandByProduct = predictions
-    .reduce((acc: any[], pred) => {
-      const existing = acc.find((p) => p.producto === pred.producto);
+    .reduce((acc: any[], pred: any) => {
+      const existing = acc.find((p: any) => p.producto === pred.producto);
       if (existing) {
         existing.demanda += pred.demandaPredicha;
       } else {
@@ -117,13 +123,13 @@ export default function Forecasting() {
       }
       return acc;
     }, [])
-    .sort((a, b) => b.demanda - a.demanda)
+    .sort((a: any, b: any) => b.demanda - a.demanda)
     .slice(0, 10);
 
   const demandByStore = predictions
-    .reduce((acc: any[], pred) => {
+    .reduce((acc: any[], pred: any) => {
       if (!pred.tienda) return acc;
-      const existing = acc.find((p) => p.tienda === pred.tienda);
+      const existing = acc.find((p: any) => p.tienda === pred.tienda);
       if (existing) {
         existing.demanda += pred.demandaPredicha;
       } else {
@@ -134,12 +140,12 @@ export default function Forecasting() {
       }
       return acc;
     }, [])
-    .sort((a, b) => b.demanda - a.demanda);
+    .sort((a: any, b: any) => b.demanda - a.demanda);
 
   const demandByFamily = predictions
-    .reduce((acc: any[], pred) => {
+    .reduce((acc: any[], pred: any) => {
       if (!pred.familia) return acc;
-      const existing = acc.find((p) => p.familia === pred.familia);
+      const existing = acc.find((p: any) => p.familia === pred.familia);
       if (existing) {
         existing.demanda += pred.demandaPredicha;
       } else {
@@ -150,12 +156,12 @@ export default function Forecasting() {
       }
       return acc;
     }, [])
-    .sort((a, b) => b.demanda - a.demanda);
+    .sort((a: any, b: any) => b.demanda - a.demanda);
 
   const demandBySeason = predictions
-    .reduce((acc: any[], pred) => {
+    .reduce((acc: any[], pred: any) => {
       if (!pred.temporada) return acc;
-      const existing = acc.find((p) => p.temporada === pred.temporada);
+      const existing = acc.find((p: any) => p.temporada === pred.temporada);
       if (existing) {
         existing.demanda += pred.demandaPredicha;
       } else {
@@ -166,7 +172,7 @@ export default function Forecasting() {
       }
       return acc;
     }, [])
-    .sort((a, b) => b.demanda - a.demanda);
+    .sort((a: any, b: any) => b.demanda - a.demanda);
 
   return (
     <div className="flex h-full bg-background">
@@ -542,7 +548,7 @@ export default function Forecasting() {
                                 fill="#8884d8"
                                 label
                               >
-                                {demandByFamily.map((entry, index) => (
+                                {demandByFamily.map((entry: any, index: number) => (
                                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                 ))}
                               </Pie>
@@ -592,7 +598,7 @@ export default function Forecasting() {
         </div>
       </div>
 
-      <Chatbot />
+      <Chatbot section="forecasting" />
     </div>
   );
 }

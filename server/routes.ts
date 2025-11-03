@@ -635,6 +635,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/forecast/jobs/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const jobs = await storage.getForecastJobsByFileId(fileId);
+
+      res.json(jobs);
+    } catch (error: any) {
+      console.error("Forecast jobs retrieval error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error retrieving forecast jobs" 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

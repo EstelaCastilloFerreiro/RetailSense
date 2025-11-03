@@ -23,7 +23,10 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
 - ✅ Login page implemented with "Retail Analytics" branding and KLOB logo
 - ✅ Protected routes system using localStorage authentication
 - ✅ KPI numbers size reduced (text-2xl) for better visual balance
-- 🚧 In progress: Completing all 4 dashboard sections with Streamlit feature parity
+- ✅ Three-section navigation structure with Shadcn sidebar (Analytics, Forecasting, Sentiment Analysis)
+- ✅ Forecasting backend complete with mock ML predictions and API endpoints
+- ✅ Section-aware chatbot integration across all sections
+- ✅ Sentiment Analysis placeholder page ready for future development
 
 ## User Preferences
 
@@ -48,13 +51,18 @@ Preferred communication style: Simple, everyday language.
 
 **Routing**: Wouter (lightweight client-side routing)
 - `/` - Upload page
-- `/dashboard` - Main analytics dashboard with tabbed interface
+- `/analytics` - Analytics section with BI dashboards and KPI visualizations
+- `/forecasting` - Forecasting section with ML-based demand prediction and price optimization
+- `/sentiment` - Sentiment Analysis section (placeholder for future development)
+- `/dashboard` - Legacy route (redirects to /analytics for backward compatibility)
 
 **Key Frontend Components**:
+- `AppSidebar`: Shadcn sidebar with three-section navigation (Analytics, Forecasting, Sentiment)
 - `FileUpload`: Drag-and-drop Excel/CSV upload with progress tracking
 - `FilterSidebar`: Dynamic filtering by temporada (season), familia (product family), tiendas (stores)
 - `DashboardTabs`: Tabbed interface (Overview, Geographic/Stores, Products/Campaigns)
 - `KPICard`: Reusable metric display with trend indicators
+- `Chatbot`: Section-aware AI assistant for visualizations and queries
 - Chart components: Demand forecasting, price optimization, regional sales, inventory tables, top products
 
 ### Backend Architecture
@@ -65,6 +73,10 @@ Preferred communication style: Simple, everyday language.
 - `POST /api/upload` - File upload and initial processing
 - `GET /api/dashboard/:fileId` - Dashboard data with optional filter query params
 - `GET /api/filters/:fileId` - Available filter options for uploaded data
+- `POST /api/forecast/run` - Create forecast job with ML predictions
+- `GET /api/forecast/:id` - Get forecast job status and results
+- `GET /api/forecast/latest/:fileId` - Get latest forecast for a file
+- `POST /api/chatbot/:fileId` - Section-aware chatbot queries
 
 **File Processing Pipeline**:
 1. Multer middleware handles file uploads (50MB limit, Excel/CSV only)
@@ -76,12 +88,14 @@ Preferred communication style: Simple, everyday language.
 **Data Processing Services**:
 - `excelProcessor.ts`: Column detection, structure mapping, sheet parsing
 - `kpiCalculator.ts`: Business logic for KPI calculations, filtering, aggregations
+- `forecastingService.ts`: ML-based demand prediction with mock models (CatBoost/XGBoost/Prophet)
+- `chatbotService.ts`: Section-aware chatbot with visualization generation
 - Separation of data processing logic from API routes for maintainability
 
 **Storage Strategy**:
 - In-memory storage implementation (`MemStorage`) for development
 - Interface-based design (`IStorage`) allows easy swap to persistent database
-- Separate storage for: uploaded files metadata, client configs, sales data, product data, transfer data
+- Separate storage for: uploaded files metadata, client configs, sales data, product data, transfer data, forecast jobs
 
 ### Data Storage Solutions
 
@@ -99,6 +113,8 @@ Preferred communication style: Simple, everyday language.
 - **VentasData**: Sales transactions (product codes, quantities, prices, dates, stores, categories)
 - **ProductosData**: Purchase/inventory data (products, quantities ordered, costs, PVP)
 - **TraspasosData**: Store transfer data (products moved between locations)
+- **ForecastJob**: ML forecast jobs (status, model, predictions, summary statistics)
+- **ForecastPrediction**: Individual product predictions (demand, optimal price, confidence)
 
 **Schema Design Philosophy**:
 - Flexible optional fields to handle varying client data structures
