@@ -54,12 +54,15 @@ async function processForecast(
     );
 
     // Calculate summary statistics
+    const pricesWithValues = predictions.filter(p => p.precioOptimo !== undefined);
     const summary = {
       totalPredictions: predictions.length,
-      avgDemand: predictions.reduce((sum, p) => sum + p.demandaPredicha, 0) / predictions.length,
-      avgPrice: predictions
-        .filter(p => p.precioOptimo !== undefined)
-        .reduce((sum, p) => sum + (p.precioOptimo || 0), 0) / predictions.length,
+      avgDemand: predictions.length > 0 
+        ? predictions.reduce((sum, p) => sum + p.demandaPredicha, 0) / predictions.length 
+        : 0,
+      avgPrice: pricesWithValues.length > 0
+        ? pricesWithValues.reduce((sum, p) => sum + (p.precioOptimo || 0), 0) / pricesWithValues.length
+        : 0,
       modelAccuracy: 0.85 + Math.random() * 0.10, // Mock accuracy 85-95%
     };
 

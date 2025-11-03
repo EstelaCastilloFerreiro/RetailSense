@@ -113,7 +113,7 @@ export default function SentimentAnalysis() {
         </div>
       </div>
 
-      <Chatbot />
+      <Chatbot section="sentiment" />
     </div>
   );
 }

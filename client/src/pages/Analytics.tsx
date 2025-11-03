@@ -26,7 +26,7 @@ export default function Analytics() {
         </main>
       </div>
 
-      <Chatbot />
+      <Chatbot section="analytics" />
     </div>
   );
 }

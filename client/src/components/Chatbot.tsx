@@ -34,7 +34,11 @@ interface Message {
   };
 }
 
-export default function Chatbot() {
+interface ChatbotProps {
+  section: "analytics" | "forecasting" | "sentiment";
+}
+
+export default function Chatbot({ section }: ChatbotProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -60,7 +64,7 @@ export default function Chatbot() {
       const response = await fetch(`/api/chatbot/${fileId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, section }),
       });
 
       if (!response.ok) {
