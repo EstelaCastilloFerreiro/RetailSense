@@ -121,9 +121,58 @@ export const dashboardDataSchema = z.object({
 
 export type DashboardData = z.infer<typeof dashboardDataSchema>;
 
+// Schema for forecast jobs
+export const forecastJobSchema = z.object({
+  id: z.string(),
+  fileId: z.string(),
+  clientId: z.string(),
+  model: z.enum(["catboost", "xgboost", "prophet"]),
+  status: z.enum(["pending", "running", "completed", "failed"]),
+  createdAt: z.string(),
+  completedAt: z.string().optional(),
+  error: z.string().optional(),
+  results: z.object({
+    predictions: z.array(z.object({
+      producto: z.string(),
+      tienda: z.string().optional(),
+      familia: z.string().optional(),
+      temporada: z.string().optional(),
+      periodoInicio: z.string(),
+      periodoFin: z.string(),
+      demandaPredicha: z.number(),
+      precioOptimo: z.number().optional(),
+      margenEstimado: z.number().optional(),
+      confianza: z.number(),
+    })),
+    summary: z.object({
+      totalPredictions: z.number(),
+      avgDemand: z.number(),
+      avgPrice: z.number().optional(),
+      modelAccuracy: z.number().optional(),
+    }),
+  }).optional(),
+});
+
+export type ForecastJob = z.infer<typeof forecastJobSchema>;
+
+export const forecastRequestSchema = z.object({
+  fileId: z.string(),
+  model: z.enum(["catboost", "xgboost", "prophet"]),
+  filters: z.object({
+    temporadas: z.array(z.string()).optional(),
+    familias: z.array(z.string()).optional(),
+    tiendas: z.array(z.string()).optional(),
+  }).optional(),
+  horizon: z.number().default(3), // Months to forecast
+});
+
+export type ForecastRequest = z.infer<typeof forecastRequestSchema>;
+
 // Insert schemas
 export const insertUploadedFileSchema = uploadedFileSchema.omit({ id: true });
 export const insertClientConfigSchema = clientConfigSchema;
+export const insertForecastJobSchema = forecastJobSchema.omit({ id: true, createdAt: true });
 
 export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;
 export type InsertClientConfig = z.infer<typeof insertClientConfigSchema>;
+export type InsertForecastJob = z.infer<typeof insertForecastJobSchema>;

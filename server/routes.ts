@@ -11,6 +11,8 @@ import {
   calculatePhotoAnalysisData
 } from "./services/kpiCalculatorExtended";
 import { processChatbotRequest } from "./services/chatbotService";
+import { createForecastJob, getForecastJob, getLatestForecastJob } from "./services/forecastingService";
+import { forecastRequestSchema } from "@shared/schema";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -561,6 +563,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Chatbot error:", error);
       res.status(500).json({ 
         error: error.message || "Error processing chatbot request" 
+      });
+    }
+  });
+
+  // Forecast endpoints for ML-based demand prediction
+  app.post("/api/forecast/run", async (req, res) => {
+    try {
+      const clientId = "demo-client"; // In production, get from auth
+      const validatedRequest = forecastRequestSchema.parse(req.body);
+
+      // Verify file exists
+      const uploadedFile = await storage.getUploadedFile(validatedRequest.fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Verify data exists
+      const ventas = await storage.getVentasData(validatedRequest.fileId);
+      if (ventas.length === 0) {
+        return res.status(400).json({ 
+          error: "No sales data available for forecasting" 
+        });
+      }
+
+      const job = await createForecastJob(validatedRequest, clientId);
+      res.json(job);
+    } catch (error: any) {
+      console.error("Forecast creation error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error creating forecast job" 
+      });
+    }
+  });
+
+  app.get("/api/forecast/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const job = await getForecastJob(id);
+
+      if (!job) {
+        return res.status(404).json({ error: "Forecast job not found" });
+      }
+
+      res.json(job);
+    } catch (error: any) {
+      console.error("Forecast retrieval error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error retrieving forecast job" 
+      });
+    }
+  });
+
+  app.get("/api/forecast/latest/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const job = await getLatestForecastJob(fileId);
+
+      if (!job) {
+        return res.status(404).json({ 
+          error: "No forecast jobs found for this file" 
+        });
+      }
+
+      res.json(job);
+    } catch (error: any) {
+      console.error("Latest forecast retrieval error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error retrieving latest forecast" 
       });
     }
   });

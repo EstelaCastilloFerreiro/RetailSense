@@ -6,6 +6,8 @@ import {
   type VentasData,
   type ProductosData,
   type TraspasosData,
+  type ForecastJob,
+  type InsertForecastJob,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -28,6 +30,12 @@ export interface IStorage {
   
   saveTraspasosData(fileId: string, data: TraspasosData[]): Promise<void>;
   getTraspasosData(fileId: string): Promise<TraspasosData[]>;
+
+  // Forecast jobs
+  saveForecastJob(job: InsertForecastJob): Promise<ForecastJob>;
+  getForecastJob(id: string): Promise<ForecastJob | undefined>;
+  getForecastJobsByFileId(fileId: string): Promise<ForecastJob[]>;
+  updateForecastJob(id: string, updates: Partial<ForecastJob>): Promise<ForecastJob | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -36,6 +44,7 @@ export class MemStorage implements IStorage {
   private ventasData: Map<string, VentasData[]>;
   private productosData: Map<string, ProductosData[]>;
   private traspasosData: Map<string, TraspasosData[]>;
+  private forecastJobs: Map<string, ForecastJob>;
 
   constructor() {
     this.uploadedFiles = new Map();
@@ -43,6 +52,7 @@ export class MemStorage implements IStorage {
     this.ventasData = new Map();
     this.productosData = new Map();
     this.traspasosData = new Map();
+    this.forecastJobs = new Map();
   }
 
   async saveUploadedFile(file: InsertUploadedFile): Promise<UploadedFile> {
@@ -93,6 +103,33 @@ export class MemStorage implements IStorage {
 
   async getTraspasosData(fileId: string): Promise<TraspasosData[]> {
     return this.traspasosData.get(fileId) || [];
+  }
+
+  async saveForecastJob(job: InsertForecastJob): Promise<ForecastJob> {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    const forecastJob: ForecastJob = { ...job, id, createdAt };
+    this.forecastJobs.set(id, forecastJob);
+    return forecastJob;
+  }
+
+  async getForecastJob(id: string): Promise<ForecastJob | undefined> {
+    return this.forecastJobs.get(id);
+  }
+
+  async getForecastJobsByFileId(fileId: string): Promise<ForecastJob[]> {
+    return Array.from(this.forecastJobs.values()).filter(
+      (job) => job.fileId === fileId
+    );
+  }
+
+  async updateForecastJob(id: string, updates: Partial<ForecastJob>): Promise<ForecastJob | undefined> {
+    const existingJob = this.forecastJobs.get(id);
+    if (!existingJob) return undefined;
+
+    const updatedJob = { ...existingJob, ...updates };
+    this.forecastJobs.set(id, updatedJob);
+    return updatedJob;
   }
 }
 
