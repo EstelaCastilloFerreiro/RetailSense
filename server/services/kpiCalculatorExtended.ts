@@ -65,6 +65,53 @@ export interface ExtendedDashboardData {
     temporada?: string;
   }>;
   
+  // Ventas por talla con desglose por temporada (para gráfico apilado)
+  ventasPorTallaConTemporada?: Array<Record<string, string | number>>;
+  
+  // Pendientes de Entrega (productos sin fechaAlmacen)
+  pendientesEntrega?: Array<{
+    talla: string;
+    cantidad: number;
+  }>;
+  
+  // Entradas almacén por tema/temporada
+  entradasAlmacenPorTema?: Array<{
+    tema: string;
+    temporada: string;
+    mes: string;
+    talla: string;
+    cantidadEntrada: number;
+    cantidadTraspasada?: number;
+    cantidadVendida?: number;
+  }>;
+  
+  // Comparación Enviado vs Ventas por tema
+  comparacionEnviadoVsVentasPorTema?: Array<{
+    tema: string;
+    temporada: string;
+    talla: string;
+    cantidadEnviado: number;
+    cantidadVentas: number;
+  }>;
+  
+  // Análisis Temporal: Entrada → Envío → Primera Venta
+  analisisTemporal?: {
+    datos: Array<{
+      codigoUnico: string;
+      tema: string;
+      talla: string;
+      tiendaEnvio: string;
+      fechaEntradaAlmacen: string;
+      fechaEnviado: string;
+      fechaPrimeraVenta: string | null;
+      diasEntradaEnvio: number;
+      diasEnvioPrimeraVenta: number | null;
+    }>;
+    promedioDiasEntradaEnvio: number;
+    promedioDiasEnvioPrimeraVenta: number | null;
+    totalProductos: number;
+  };
+  
   // KPIs de Rotación de Stock (opcional, solo si hay fechaAlmacen en productos)
   kpisRotacion?: {
     tiendaMayorRotacion: string;
@@ -80,6 +127,57 @@ export interface ExtendedDashboardData {
     desviacionEstandar: number;
     totalProductos: number;
   };
+  
+  // Entradas almacén y traspasos por tema/temporada
+  entradasAlmacen?: Array<{
+    tema: string;
+    temporada: string;
+    mes: string;
+    talla: string;
+    cantidadEntrada: number;
+    cantidadTraspasada?: number;
+    cantidadVendida?: number;
+  }>;
+  
+  // Cantidad pedida por mes y talla
+  cantidadPedidaPorMesTalla?: Array<{
+    mes: string;
+    talla: string;
+    cantidad: number;
+  }>;
+  
+  // Ventas vs Traspasos por Tienda
+  ventasVsTraspasosPorTienda?: Array<{
+    tienda: string;
+    temporada: string;
+    ventas: number;
+    traspasos: number;
+  }>;
+  
+  // Resumen de Ventas vs Traspasos por Temporada
+  resumenVentasVsTraspasosTemporada?: Array<{
+    temporada: string;
+    ventas: number;
+    traspasos: number;
+    diferencia: number;
+    eficiencia: number;
+  }>;
+  
+  // Totales por Tienda
+  totalesPorTienda?: Array<{
+    tienda: string;
+    ventas: number;
+    traspasos: number;
+    diferencia: number;
+    devoluciones: number;
+    eficiencia: number;
+    ratioDevolucion: number;
+    detallePorTemporada?: Array<{
+      temporada: string;
+      ventas: number;
+      traspasos: number;
+    }>;
+  }>;
 }
 
 const TIENDAS_ONLINE = [
@@ -510,6 +608,32 @@ export function calculateExtendedDashboardData(
     .map(([talla, cantidad]) => ({ talla, cantidad }))
     .sort((a, b) => b.cantidad - a.cantidad);
   
+  // Ventas por talla y temporada (para gráfico apilado)
+  const tallasPorTemporadaMap = new Map<string, Map<string, number>>();
+  filteredVentas.forEach(v => {
+    if (!v.talla || !v.temporada || (v.cantidad || 0) <= 0) return;
+    if (!tallasPorTemporadaMap.has(v.talla)) {
+      tallasPorTemporadaMap.set(v.talla, new Map());
+    }
+    const temporadasMap = tallasPorTemporadaMap.get(v.talla)!;
+    temporadasMap.set(v.temporada, (temporadasMap.get(v.temporada) || 0) + (v.cantidad || 0));
+  });
+  
+  const ventasPorTallaConTemporada = Array.from(tallasPorTemporadaMap.entries())
+    .map(([talla, temporadasMap]) => {
+      const data: any = { talla };
+      temporadasMap.forEach((cantidad, temporada) => {
+        data[temporada] = cantidad;
+      });
+      return data;
+    })
+    .sort((a, b) => {
+      // Ordenar por total de todas las temporadas
+      const totalA = Object.values(a).filter((v: any) => typeof v === 'number').reduce((sum: number, v: any) => sum + v, 0);
+      const totalB = Object.values(b).filter((v: any) => typeof v === 'number').reduce((sum: number, v: any) => sum + v, 0);
+      return totalB - totalA;
+    });
+  
   // Calcular KPIs de Rotación de Stock (igual que Streamlit)
   let kpisRotacion: ExtendedDashboardData['kpisRotacion'] | undefined;
   
@@ -537,6 +661,587 @@ export function calculateExtendedDashboardData(
     console.log(`⚠️ No se pueden calcular KPIs de Rotación: productos con fecha=${productosConFechaAlmacen.length}, ventas=${ventasReales.length}`);
   }
   
+  // Calcular Cantidad Pedida por Mes y Talla
+  let cantidadPedidaPorMesTalla: ExtendedDashboardData['cantidadPedidaPorMesTalla'] | undefined;
+  const productosConFecha = productos.filter(p => p.fechaAlmacen && p.cantidadPedida);
+  if (productosConFecha.length > 0) {
+    // Obtener último mes de ventas para filtrar si es necesario
+    const mesesVentas = filteredVentas
+      .filter(v => v.fechaVenta)
+      .map(v => {
+        const fecha = parseDate(v.fechaVenta!.toString());
+        return fecha ? `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}` : null;
+      })
+      .filter(Boolean) as string[];
+    
+    const ultimoMesVentas = mesesVentas.length > 0 ? mesesVentas.sort().pop()! : null;
+    
+    // Obtener todos los meses únicos de productos
+    const mesesProductos = Array.from(new Set(productosConFecha.map(p => {
+      if (!p.fechaAlmacen) return null;
+      const fecha = parseDate(p.fechaAlmacen.toString());
+      return fecha ? `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}` : null;
+    }).filter(Boolean))) as string[];
+    
+    // Obtener todas las tallas únicas
+    const tallasProductos = Array.from(new Set(productosConFecha.map(p => p.talla).filter(Boolean))) as string[];
+    
+    // Crear mapa con todas las combinaciones
+    const pedidaMap = new Map<string, number>();
+    productosConFecha.forEach(p => {
+      if (!p.fechaAlmacen || !p.talla || !p.cantidadPedida) return;
+      
+      const fecha = parseDate(p.fechaAlmacen.toString());
+      if (!fecha) return;
+      
+      const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Filtrar por último mes de ventas si existe
+      if (ultimoMesVentas && mes > ultimoMesVentas) return;
+      
+      const key = `${mes}|${p.talla}`;
+      pedidaMap.set(key, (pedidaMap.get(key) || 0) + (p.cantidadPedida || 0));
+    });
+    
+    // Crear array completo con todas las combinaciones (incluyendo 0)
+    cantidadPedidaPorMesTalla = [];
+    mesesProductos.forEach(mes => {
+      if (ultimoMesVentas && mes > ultimoMesVentas) return;
+      
+      tallasProductos.forEach(talla => {
+        const key = `${mes}|${talla}`;
+        cantidadPedidaPorMesTalla!.push({
+          mes,
+          talla,
+          cantidad: pedidaMap.get(key) || 0,
+        });
+      });
+    });
+    
+    cantidadPedidaPorMesTalla.sort((a, b) => a.mes.localeCompare(b.mes) || a.talla.localeCompare(b.talla));
+  }
+  
+  // Calcular Ventas vs Traspasos por Tienda
+  let ventasVsTraspasosPorTienda: ExtendedDashboardData['ventasVsTraspasosPorTienda'] | undefined;
+  let resumenVentasVsTraspasosTemporada: ExtendedDashboardData['resumenVentasVsTraspasosTemporada'] | undefined;
+  let totalesPorTienda: ExtendedDashboardData['totalesPorTienda'] | undefined;
+  
+  if (traspasos.length > 0 && filteredVentas.length > 0) {
+    // Obtener códigos únicos de ventas
+    const codigosUnicosVentas = new Set(filteredVentas.map(v => v.codigoUnico).filter(Boolean));
+    
+    // Filtrar traspasos que tienen códigos únicos en ventas
+    const traspasosFiltrados = traspasos.filter(t => 
+      t.codigoUnico && codigosUnicosVentas.has(t.codigoUnico)
+    );
+    
+    // Obtener último mes de ventas para filtrar traspasos
+    const mesesVentas = filteredVentas
+      .filter(v => v.fechaVenta)
+      .map(v => {
+        const fecha = parseDate(v.fechaVenta!.toString());
+        return fecha ? `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}` : null;
+      })
+      .filter(Boolean) as string[];
+    
+    const ultimoMesVentas = mesesVentas.length > 0 ? mesesVentas.sort().pop()! : null;
+    
+    // Agrupar ventas por tienda y temporada (solo positivas)
+    const ventasPorTiendaTemp = new Map<string, number>();
+    filteredVentas
+      .filter(v => (v.cantidad || 0) > 0 && v.tienda && v.temporada)
+      .forEach(v => {
+        const key = `${v.tienda}|${v.temporada}`;
+        ventasPorTiendaTemp.set(key, (ventasPorTiendaTemp.get(key) || 0) + (v.cantidad || 0));
+      });
+    
+    // Agrupar traspasos por tienda y temporada
+    const traspasosPorTiendaTemp = new Map<string, number>();
+    traspasosFiltrados
+      .filter(t => {
+        if (!t.tienda || !t.enviado) return false;
+        
+        // Filtrar por último mes si hay fecha
+        if (ultimoMesVentas && t.fechaEnviado) {
+          const fecha = parseDate(t.fechaEnviado.toString());
+          if (fecha) {
+            const mesTraspaso = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            if (mesTraspaso > ultimoMesVentas) return false;
+          }
+        }
+        
+        return true;
+      })
+      .forEach(t => {
+        // Obtener temporada del producto relacionado con ventas
+        const productoVenta = filteredVentas.find(v => v.codigoUnico === t.codigoUnico);
+        const temporada = productoVenta?.temporada || 'Sin Temporada';
+        const key = `${t.tienda}|${temporada}`;
+        traspasosPorTiendaTemp.set(key, (traspasosPorTiendaTemp.get(key) || 0) + (t.enviado || 0));
+      });
+    
+    // Combinar datos de ventas vs traspasos por tienda
+    const ventasVsTraspasosSet = new Set([
+      ...Array.from(ventasPorTiendaTemp.keys()),
+      ...Array.from(traspasosPorTiendaTemp.keys())
+    ]);
+    
+    ventasVsTraspasosPorTienda = Array.from(ventasVsTraspasosSet)
+      .map(key => {
+        const [tienda, temporada] = key.split('|');
+        return {
+          tienda,
+          temporada,
+          ventas: ventasPorTiendaTemp.get(key) || 0,
+          traspasos: traspasosPorTiendaTemp.get(key) || 0,
+        };
+      })
+      .filter(item => item.ventas > 0 || item.traspasos > 0);
+    
+    // Calcular resumen por temporada
+    const resumenPorTemporada = new Map<string, { ventas: number; traspasos: number }>();
+    ventasVsTraspasosPorTienda.forEach(item => {
+      if (!resumenPorTemporada.has(item.temporada)) {
+        resumenPorTemporada.set(item.temporada, { ventas: 0, traspasos: 0 });
+      }
+      const resumen = resumenPorTemporada.get(item.temporada)!;
+      resumen.ventas += item.ventas;
+      resumen.traspasos += item.traspasos;
+    });
+    
+    resumenVentasVsTraspasosTemporada = Array.from(resumenPorTemporada.entries())
+      .map(([temporada, datos]) => ({
+        temporada,
+        ventas: datos.ventas,
+        traspasos: datos.traspasos,
+        diferencia: datos.ventas - datos.traspasos,
+        eficiencia: datos.traspasos > 0 ? (datos.ventas / datos.traspasos) * 100 : 0,
+      }))
+      .sort((a, b) => a.temporada.localeCompare(b.temporada));
+    
+    // Calcular totales por tienda (top 50 tiendas por ventas)
+    const ventasTotalesPorTienda = new Map<string, number>();
+    filteredVentas
+      .filter(v => (v.cantidad || 0) > 0 && v.tienda)
+      .forEach(v => {
+        ventasTotalesPorTienda.set(v.tienda!, (ventasTotalesPorTienda.get(v.tienda!) || 0) + (v.cantidad || 0));
+      });
+    
+    const top50Tiendas = Array.from(ventasTotalesPorTienda.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 50)
+      .map(([tienda]) => tienda);
+    
+    const devolucionesPorTienda = new Map<string, number>();
+    filteredVentas
+      .filter(v => (v.cantidad || 0) < 0 && v.tienda)
+      .forEach(v => {
+        devolucionesPorTienda.set(v.tienda!, (devolucionesPorTienda.get(v.tienda!) || 0) + Math.abs(v.cantidad || 0));
+      });
+    
+    const traspasosTotalesPorTienda = new Map<string, number>();
+    traspasosFiltrados
+      .filter(t => top50Tiendas.includes(t.tienda || ''))
+      .forEach(t => {
+        traspasosTotalesPorTienda.set(t.tienda!, (traspasosTotalesPorTienda.get(t.tienda!) || 0) + (t.enviado || 0));
+      });
+    
+    // Detalle por temporada para cada tienda
+    const detallePorTiendaTemporada = new Map<string, Map<string, { ventas: number; traspasos: number }>>();
+    ventasVsTraspasosPorTienda.forEach(item => {
+      if (!top50Tiendas.includes(item.tienda)) return;
+      
+      if (!detallePorTiendaTemporada.has(item.tienda)) {
+        detallePorTiendaTemporada.set(item.tienda, new Map());
+      }
+      const detalle = detallePorTiendaTemporada.get(item.tienda)!;
+      
+      if (!detalle.has(item.temporada)) {
+        detalle.set(item.temporada, { ventas: 0, traspasos: 0 });
+      }
+      const datos = detalle.get(item.temporada)!;
+      datos.ventas += item.ventas;
+      datos.traspasos += item.traspasos;
+    });
+    
+    totalesPorTienda = top50Tiendas.map(tienda => {
+      const ventas = ventasTotalesPorTienda.get(tienda) || 0;
+      const traspasos = traspasosTotalesPorTienda.get(tienda) || 0;
+      const devoluciones = devolucionesPorTienda.get(tienda) || 0;
+      const diferencia = ventas - traspasos;
+      const eficiencia = traspasos > 0 ? (ventas / traspasos) * 100 : 0;
+      const ratioDevolucion = ventas > 0 ? (devoluciones / ventas) * 100 : 0;
+      
+      const detalle = detallePorTiendaTemporada.get(tienda);
+      const detallePorTemporada = detalle ? Array.from(detalle.entries())
+        .map(([temporada, datos]) => ({
+          temporada,
+          ventas: datos.ventas,
+          traspasos: datos.traspasos,
+        }))
+        .sort((a, b) => a.temporada.localeCompare(b.temporada)) : undefined;
+      
+      return {
+        tienda,
+        ventas,
+        traspasos,
+        diferencia,
+        devoluciones,
+        eficiencia,
+        ratioDevolucion,
+        detallePorTemporada,
+      };
+    })
+    .sort((a, b) => b.ventas - a.ventas);
+  }
+  
+  // Calcular Pendientes de Entrega (productos sin fechaAlmacen válida)
+  let pendientesEntrega: ExtendedDashboardData['pendientesEntrega'] | undefined;
+  const productosSinFecha = productos.filter(p => {
+    // Productos sin fechaAlmacen válida (undefined, null, o string vacío)
+    const tieneFecha = p.fechaAlmacen && 
+                       String(p.fechaAlmacen).trim() !== '' && 
+                       String(p.fechaAlmacen).trim() !== 'null' &&
+                       String(p.fechaAlmacen).trim() !== 'undefined';
+    return !tieneFecha && p.cantidadPedida && p.cantidadPedida > 0;
+  });
+  
+  console.log(`📦 Pendientes de entrega: ${productosSinFecha.length} productos sin fechaAlmacen de ${productos.length} total`);
+  
+  if (productosSinFecha.length > 0) {
+    const pendientesMap = new Map<string, number>();
+    productosSinFecha.forEach(p => {
+      if (!p.talla || !p.cantidadPedida) return;
+      const tallaClean = String(p.talla).trim();
+      pendientesMap.set(tallaClean, (pendientesMap.get(tallaClean) || 0) + (p.cantidadPedida || 0));
+    });
+    
+    pendientesEntrega = Array.from(pendientesMap.entries())
+      .map(([talla, cantidad]) => ({ talla, cantidad }))
+      .sort((a, b) => a.talla.localeCompare(b.talla));
+    
+    console.log(`✅ Pendientes de entrega calculados: ${pendientesEntrega.length} tallas diferentes`);
+  }
+  
+  // Calcular Entradas almacén por tema/temporada
+  // Primero necesitamos obtener la familia más común de ventas filtradas
+  const familiaActual = ventasReales.length > 0 
+    ? ventasReales.reduce((acc, v) => {
+        const familia = v.familia || v.descripcionFamilia || '';
+        acc.set(familia, (acc.get(familia) || 0) + 1);
+        return acc;
+      }, new Map<string, number>())
+    : new Map<string, number>();
+  
+  const familiaMasComun = familiaActual.size > 0
+    ? Array.from(familiaActual.entries()).sort((a, b) => b[1] - a[1])[0][0]
+    : null;
+  
+  // Filtrar productos por familia y que tengan tema y fechaAlmacen
+  // Primero obtener todos los productos con tema válido (no "Sin Tema")
+  const productosConTemaValido = productos.filter(p => {
+    const tieneFecha = p.fechaAlmacen && 
+                       String(p.fechaAlmacen).trim() !== '' && 
+                       String(p.fechaAlmacen).trim() !== 'null' &&
+                       String(p.fechaAlmacen).trim() !== 'undefined';
+    const temaValido = p.tema && 
+                       String(p.tema).trim() !== '' && 
+                       String(p.tema).trim().toLowerCase() !== 'sin tema' &&
+                       String(p.tema).trim().toLowerCase() !== 'nan' &&
+                       String(p.tema).trim().toLowerCase() !== 'none';
+    return tieneFecha && temaValido;
+  });
+  
+  console.log(`📦 Productos con tema válido: ${productosConTemaValido.length} de ${productos.length} total`);
+  if (productosConTemaValido.length > 0) {
+    const temasUnicos = Array.from(new Set(productosConTemaValido.map(p => p.tema).filter(Boolean)));
+    console.log(`📦 Temas únicos encontrados: ${temasUnicos.join(', ')}`);
+  }
+  
+  // Filtrar por familia si hay familia más común
+  const productosConTema = productosConTemaValido.filter(p => {
+    if (familiaMasComun) {
+      // Intentar obtener familia del producto comparando con ventas
+      const productoVenta = ventasReales.find(v => v.codigoUnico === p.codigoUnico);
+      const familiaProducto = productoVenta?.familia || productoVenta?.descripcionFamilia || p.familia || '';
+      return familiaProducto === familiaMasComun;
+    }
+    return true;
+  });
+  
+  console.log(`📦 Productos con tema después de filtrar por familia: ${productosConTema.length}`);
+  
+  let entradasAlmacenPorTema: ExtendedDashboardData['entradasAlmacenPorTema'] | undefined;
+  if (productosConTema.length > 0) {
+    console.log(`📦 Calculando entradas almacén por tema para ${productosConTema.length} productos`);
+    const entradasMap = new Map<string, {
+      tema: string;
+      temporada: string;
+      mes: string;
+      talla: string;
+      cantidadEntrada: number;
+    }>();
+    
+    productosConTema.forEach(p => {
+      if (!p.fechaAlmacen || !p.tema || !p.talla || !p.cantidadPedida) return;
+      
+      const fecha = parseDate(p.fechaAlmacen.toString());
+      if (!fecha) return;
+      
+      const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Obtener temporada del tema (si el tema es "T_OI25" -> temporada "O2025")
+      let temporada = '';
+      if (p.tema.startsWith('T_') && p.tema.length === 6) {
+        const seasonCode = p.tema.substring(2, 4); // 'OI' or 'PV'
+        const yearCode = p.tema.substring(4); // '23', '24', '25'
+        temporada = `${seasonCode[0]}20${yearCode}`;
+      } else {
+        // Intentar obtener temporada de ventas relacionadas
+        const productoVenta = ventasReales.find(v => v.codigoUnico === p.codigoUnico);
+        temporada = productoVenta?.temporada || p.temporada || '';
+      }
+      
+      const key = `${p.tema}|${temporada}|${mes}|${p.talla}`;
+      const existing = entradasMap.get(key);
+      if (existing) {
+        existing.cantidadEntrada += p.cantidadPedida || 0;
+      } else {
+        entradasMap.set(key, {
+          tema: p.tema,
+          temporada,
+          mes,
+          talla: p.talla,
+          cantidadEntrada: p.cantidadPedida || 0,
+        });
+      }
+    });
+    
+    entradasAlmacenPorTema = Array.from(entradasMap.values())
+      .sort((a, b) => a.mes.localeCompare(b.mes) || a.talla.localeCompare(b.talla));
+    
+    console.log(`✅ Entradas almacén por tema calculadas: ${entradasAlmacenPorTema.length} registros`);
+    const temasEncontrados = Array.from(new Set(entradasAlmacenPorTema.map(e => e.tema)));
+    console.log(`📦 Temas encontrados en entradas: ${temasEncontrados.join(', ')}`);
+  } else {
+    console.log(`⚠️ No hay productos con tema válido para calcular entradas almacén por tema`);
+  }
+  
+  // Calcular Comparación Enviado vs Ventas por tema
+  // Usar productosConTemaValido en lugar de productosConTema para no filtrar por familia
+  let comparacionEnviadoVsVentasPorTema: ExtendedDashboardData['comparacionEnviadoVsVentasPorTema'] | undefined;
+  if (productosConTemaValido.length > 0 && ventasReales.length > 0) {
+    console.log(`📦 Calculando comparación Enviado vs Ventas por tema`);
+    const comparacionMap = new Map<string, {
+      tema: string;
+      temporada: string;
+      talla: string;
+      cantidadEnviado: number;
+      cantidadVentas: number;
+    }>();
+    
+    productosConTemaValido.forEach(p => {
+      if (!p.tema || !p.talla || !p.cantidadPedida) return;
+      
+      // Obtener temporada del tema
+      let temporada = '';
+      if (p.tema.startsWith('T_') && p.tema.length === 6) {
+        const seasonCode = p.tema.substring(2, 4);
+        const yearCode = p.tema.substring(4);
+        temporada = `${seasonCode[0]}20${yearCode}`;
+      } else {
+        const productoVenta = ventasReales.find(v => v.codigoUnico === p.codigoUnico);
+        temporada = productoVenta?.temporada || p.temporada || '';
+      }
+      
+      const key = `${p.tema}|${temporada}|${p.talla}`;
+      const existing = comparacionMap.get(key);
+      if (existing) {
+        existing.cantidadEnviado += p.cantidadPedida || 0;
+      } else {
+        // Buscar ventas para este tema y temporada
+        const ventasTema = ventasReales.filter(v => {
+          if (v.temporada !== temporada) return false;
+          // Verificar si el código único está en productos con este tema
+          return productosConTemaValido.some(prod => 
+            prod.codigoUnico === v.codigoUnico && 
+            prod.tema === p.tema &&
+            prod.talla === p.talla &&
+            v.talla === p.talla
+          );
+        });
+        
+        const cantidadVentas = ventasTema
+          .filter(v => (v.cantidad || 0) > 0)
+          .reduce((sum, v) => sum + (v.cantidad || 0), 0);
+        
+        comparacionMap.set(key, {
+          tema: p.tema,
+          temporada,
+          talla: p.talla,
+          cantidadEnviado: p.cantidadPedida || 0,
+          cantidadVentas,
+        });
+      }
+    });
+    
+    // También agregar ventas que no tienen entrada en almacén
+    ventasReales.forEach(v => {
+      if (!v.temporada || !v.talla || (v.cantidad || 0) <= 0) return;
+      
+      // Buscar si hay un producto con tema para este código único
+      const producto = productosConTemaValido.find(p => 
+        p.codigoUnico === v.codigoUnico && 
+        p.talla === v.talla
+      );
+      
+      if (producto && producto.tema) {
+        const key = `${producto.tema}|${v.temporada}|${v.talla}`;
+        const existing = comparacionMap.get(key);
+        if (existing) {
+          existing.cantidadVentas += v.cantidad || 0;
+        } else {
+          comparacionMap.set(key, {
+            tema: producto.tema,
+            temporada: v.temporada,
+            talla: v.talla,
+            cantidadEnviado: 0,
+            cantidadVentas: v.cantidad || 0,
+          });
+        }
+      }
+    });
+    
+    comparacionEnviadoVsVentasPorTema = Array.from(comparacionMap.values())
+      .sort((a, b) => a.tema.localeCompare(b.tema) || a.talla.localeCompare(b.talla));
+    
+    console.log(`✅ Comparación Enviado vs Ventas por tema calculada: ${comparacionEnviadoVsVentasPorTema.length} registros`);
+  } else {
+    console.log(`⚠️ No hay datos suficientes para calcular comparación Enviado vs Ventas (productos con tema válido: ${productosConTemaValido.length}, ventas: ${ventasReales.length})`);
+  }
+  
+  // Calcular Análisis Temporal: Entrada → Envío → Primera Venta
+  // Solo si hay productos con fechaAlmacen y traspasos
+  let analisisTemporal: ExtendedDashboardData['analisisTemporal'] | undefined;
+  console.log(`📦 Datos para análisis temporal: productos con fecha=${productosConFechaAlmacen.length}, traspasos=${traspasos.length}, ventas=${filteredVentas.length}`);
+  
+  if (productosConFechaAlmacen.length > 0 && traspasos.length > 0 && filteredVentas.length > 0) {
+    console.log(`📦 Calculando análisis temporal...`);
+    // Obtener códigos únicos de productos con fecha
+    const codigosUnicosProductos = new Set(productosConFechaAlmacen.map(p => p.codigoUnico).filter(Boolean));
+    
+    // Filtrar traspasos que tienen códigos únicos en productos
+    const traspasosRelevantes = traspasos.filter(t => 
+      t.codigoUnico && codigosUnicosProductos.has(t.codigoUnico) && t.tienda && t.fechaEnviado && t.enviado
+    );
+    
+    if (traspasosRelevantes.length > 0) {
+      // Agrupar por código único, talla y tienda - solo el primer envío
+      const primerEnvio = new Map<string, TraspasosData & { fechaEnviadoDate: Date }>();
+      
+      traspasosRelevantes.forEach(t => {
+        const fechaEnviado = t.fechaEnviado ? parseDate(t.fechaEnviado.toString()) : null;
+        if (!fechaEnviado || !t.codigoUnico || !t.tienda) return;
+        
+        // Obtener talla del producto relacionado o del traspaso si está disponible
+        let tallaTraspaso = t.talla ? String(t.talla).trim() : null;
+        
+        // Si no hay talla en el traspaso, buscar en productos
+        if (!tallaTraspaso) {
+          const producto = productosConFechaAlmacen.find(p => p.codigoUnico === t.codigoUnico);
+          if (producto && producto.talla) {
+            tallaTraspaso = String(producto.talla).trim();
+          }
+        }
+        
+        if (!tallaTraspaso) return;
+        
+        const key = `${t.codigoUnico}|${tallaTraspaso}|${t.tienda}`;
+        const existing = primerEnvio.get(key);
+        if (!existing || fechaEnviado < existing.fechaEnviadoDate) {
+          primerEnvio.set(key, { ...t, fechaEnviadoDate: fechaEnviado, talla: tallaTraspaso });
+        }
+      });
+      
+      const timelineData: ExtendedDashboardData['analisisTemporal']['datos'] = [];
+      
+      primerEnvio.forEach((traspaso, key) => {
+        const [codigoUnico, talla, tiendaEnvio] = key.split('|');
+        const producto = productosConFechaAlmacen.find(p => p.codigoUnico === codigoUnico && p.talla === talla);
+        if (!producto || !producto.fechaAlmacen) return;
+        
+        const fechaEntrada = parseDate(producto.fechaAlmacen.toString());
+        if (!fechaEntrada || traspaso.fechaEnviadoDate < fechaEntrada) return;
+        
+        const diasEntradaEnvio = Math.floor((traspaso.fechaEnviadoDate.getTime() - fechaEntrada.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Buscar primera venta en esa tienda para ese producto/talla
+        const ventasProducto = filteredVentas.filter(v =>
+          v.codigoUnico === codigoUnico &&
+          v.talla === talla &&
+          v.tienda === tiendaEnvio &&
+          (v.cantidad || 0) > 0
+        );
+        
+        let fechaPrimeraVenta: Date | null = null;
+        let diasEnvioPrimeraVenta: number | null = null;
+        
+        if (ventasProducto.length > 0) {
+          const ventasConFecha = ventasProducto
+            .map(v => ({
+              venta: v,
+              fecha: v.fechaVenta ? parseDate(v.fechaVenta.toString()) : null
+            }))
+            .filter(v => v.fecha !== null && v.fecha >= fechaEntrada)
+            .sort((a, b) => a.fecha!.getTime() - b.fecha!.getTime());
+          
+          if (ventasConFecha.length > 0) {
+            fechaPrimeraVenta = ventasConFecha[0].fecha!;
+            diasEnvioPrimeraVenta = Math.floor((fechaPrimeraVenta.getTime() - traspaso.fechaEnviadoDate.getTime()) / (1000 * 60 * 60 * 24));
+          }
+        }
+        
+        timelineData.push({
+          codigoUnico,
+          tema: producto.tema || '',
+          talla,
+          tiendaEnvio,
+          fechaEntradaAlmacen: fechaEntrada.toISOString().split('T')[0],
+          fechaEnviado: traspaso.fechaEnviadoDate.toISOString().split('T')[0],
+          fechaPrimeraVenta: fechaPrimeraVenta ? fechaPrimeraVenta.toISOString().split('T')[0] : null,
+          diasEntradaEnvio,
+          diasEnvioPrimeraVenta,
+        });
+      });
+      
+      if (timelineData.length > 0) {
+        const diasEntradaEnvio = timelineData.map(d => d.diasEntradaEnvio);
+        const diasEnvioPrimeraVenta = timelineData
+          .map(d => d.diasEnvioPrimeraVenta)
+          .filter((d): d is number => d !== null);
+        
+        analisisTemporal = {
+          datos: timelineData.sort((a, b) => 
+            new Date(b.fechaEntradaAlmacen).getTime() - new Date(a.fechaEntradaAlmacen).getTime()
+          ),
+          promedioDiasEntradaEnvio: diasEntradaEnvio.reduce((sum, d) => sum + d, 0) / diasEntradaEnvio.length,
+          promedioDiasEnvioPrimeraVenta: diasEnvioPrimeraVenta.length > 0 
+            ? diasEnvioPrimeraVenta.reduce((sum, d) => sum + d, 0) / diasEnvioPrimeraVenta.length
+            : null,
+          totalProductos: timelineData.length,
+        };
+        
+        console.log(`✅ Análisis temporal calculado: ${analisisTemporal.datos.length} productos`);
+      } else {
+        console.log(`⚠️ No se encontraron datos de timeline para análisis temporal`);
+      }
+    } else {
+      console.log(`⚠️ No hay traspasos relevantes para análisis temporal`);
+    }
+  } else {
+    console.log(`⚠️ No hay datos suficientes para análisis temporal (productos con fecha: ${productosConFechaAlmacen.length}, traspasos: ${traspasos.length}, ventas: ${filteredVentas.length})`);
+  }
+  
   return {
     alcance,
     kpisGenerales,
@@ -546,7 +1251,16 @@ export function calculateExtendedDashboardData(
     topTiendas,
     bottomTiendas,
     ventasPorTalla,
+    ventasPorTallaConTemporada,
     kpisRotacion,
+    cantidadPedidaPorMesTalla,
+    ventasVsTraspasosPorTienda,
+    resumenVentasVsTraspasosTemporada,
+    totalesPorTienda,
+    pendientesEntrega,
+    entradasAlmacenPorTema,
+    comparacionEnviadoVsVentasPorTema,
+    analisisTemporal,
   };
 }
 

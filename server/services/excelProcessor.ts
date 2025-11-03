@@ -48,6 +48,9 @@ const COLUMN_MAPPINGS = {
     'Descripción Color': 'color',
     'Temporada': 'temporada',
     'Familia': 'familia', // Note: Familia might not be in Compra sheet, but adding for compatibility
+    'Tema': 'tema', // Tema_temporada from Excel
+    'Tema_temporada': 'tema', // Alternative name
+    'Tema Temporada': 'tema', // Alternative name
   },
   traspasos: {
     'ACT': 'act',
@@ -55,6 +58,7 @@ const COLUMN_MAPPINGS = {
     'Enviado': 'enviado',
     'NombreTpvDestino': 'tienda', // Destination store name
     'Fecha Documento': 'fechaEnviado',
+    'Talla': 'talla', // Talla del producto traspasado
   },
 };
 
@@ -127,13 +131,13 @@ function formatDate(excelDate: any): string {
       // Primero intentar con XLSX.SSF si está disponible
       try {
         if (XLSX.SSF && XLSX.SSF.parse_date_code) {
-          const date = XLSX.SSF.parse_date_code(excelDate);
+      const date = XLSX.SSF.parse_date_code(excelDate);
           if (date && date.y && date.m && date.d) {
-            const year = date.y;
-            const month = String(date.m).padStart(2, '0');
-            const day = String(date.d).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-          }
+      const year = date.y;
+      const month = String(date.m).padStart(2, '0');
+      const day = String(date.d).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
         }
       } catch (e) {
         // Si falla, usar método alternativo
@@ -181,7 +185,7 @@ function formatDate(excelDate: any): string {
       
       // Intentar parsear como fecha estándar (último recurso)
       const parsed = new Date(trimmed);
-      if (!isNaN(parsed.getTime())) {
+    if (!isNaN(parsed.getTime())) {
         return parsed.toISOString().split('T')[0];
       }
     }
@@ -666,6 +670,18 @@ export function processExcelFile(buffer: Buffer): {
           mapped.cantidadPedida = cleanNumericValue(mapped.cantidadPedida);
           mapped.pvp = cleanNumericValue(mapped.pvp);
           mapped.precioCoste = cleanNumericValue(mapped.precioCoste);
+          
+          // Limpiar y normalizar tema
+          if (mapped.tema !== undefined && mapped.tema !== null) {
+            const temaStr = String(mapped.tema).trim();
+            if (temaStr === '' || temaStr.toLowerCase() === 'nan' || temaStr.toLowerCase() === 'none' || temaStr.toLowerCase() === 'sin tema') {
+              mapped.tema = 'Sin Tema';
+            } else {
+              mapped.tema = temaStr;
+            }
+          } else {
+            mapped.tema = 'Sin Tema';
+          }
           
           // Format fechaAlmacen if present (permite strings vacíos pero procesa los que tienen valor)
           if (mapped.fechaAlmacen !== undefined && mapped.fechaAlmacen !== null) {

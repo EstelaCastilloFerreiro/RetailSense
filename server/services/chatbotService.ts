@@ -439,6 +439,9 @@ function calculateDirectResponse(
 ): string | null {
   const lowerMessage = message.toLowerCase().trim();
   
+  // Debug: Log el mensaje para ver qué está recibiendo
+  console.log(`🔍 Chatbot recibió: "${message}"`);
+  
   // Calcular KPIs básicos
   const totalVentas = ventas.reduce((sum, v) => sum + (v.cantidad || 0), 0);
   const totalBeneficio = ventas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
@@ -462,6 +465,176 @@ function calculateDirectResponse(
   
   // Calcular tasa de devolución
   const tasaDevolucion = totalVentas > 0 ? ((devoluciones / totalVentas) * 100).toFixed(1) : '0.0';
+  
+  // PRIORIDAD 1: Consultas filtradas por temporada/año (debe ir PRIMERO para capturar consultas específicas)
+  const añoMatch = lowerMessage.match(/(?:en\s+|del\s+)?(?:año\s+)?(\d{2,4})/);
+  if (añoMatch) {
+    const añoEncontrado = añoMatch[1];
+    let año = añoEncontrado;
+    // Si es de 2 dígitos, asumir 2000s
+    if (añoEncontrado.length === 2) {
+      año = `20${añoEncontrado}`;
+    }
+    
+    console.log(`🔍 Detectado año en consulta: ${año} (original: ${añoEncontrado})`);
+    
+    // Filtrar ventas por temporada que contenga el año O por fecha de venta
+    const ventasFiltradas = ventas.filter(v => {
+      const temporada = v.temporada ? String(v.temporada).toLowerCase() : '';
+      if (temporada.includes(año) || temporada.includes(añoEncontrado)) {
+        return true;
+      }
+      // También filtrar por fecha de venta si está disponible
+      if (v.fechaVenta) {
+        try {
+          const fecha = new Date(v.fechaVenta);
+          if (!isNaN(fecha.getTime())) {
+            const añoVenta = fecha.getFullYear().toString();
+            return añoVenta === año || añoVenta.includes(añoEncontrado);
+          }
+        } catch (e) {
+          // Ignorar errores de fecha
+        }
+      }
+      return false;
+    });
+    
+    console.log(`🔍 Ventas filtradas por año ${año}: ${ventasFiltradas.length} de ${ventas.length}`);
+    
+    if (ventasFiltradas.length > 0) {
+      // Si pregunta sobre talla de una familia específica - buscar "pantalón", "pantalones", etc.
+      // Buscar en TODO el mensaje, no solo al inicio
+      const familiaKeywords = ['pantalón', 'pantalones', 'jersey', 'jerseys', 'vestido', 'vestidos', 
+                               'camiseta', 'camisetas', 'top', 'tops', 'falda', 'faldas', 
+                               'blusa', 'blusas', 'abrigo', 'abrigos', 'chaqueta', 'chaquetas'];
+      
+      // Buscar familia con más flexibilidad - buscar palabras completas
+      let familiaNombre: string | undefined;
+      for (const keyword of familiaKeywords) {
+        // Buscar palabra completa (con límites de palabra)
+        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+        if (regex.test(lowerMessage)) {
+          familiaNombre = keyword;
+          break;
+        }
+        // También buscar como substring si no hay match completo
+        if (lowerMessage.includes(keyword)) {
+          familiaNombre = keyword;
+          break;
+        }
+      }
+      
+      console.log(`🔍 Familia detectada: ${familiaNombre || 'ninguna'}`);
+      
+      if (familiaNombre) {
+        // Buscar familia por nombre similar (más flexible)
+        const familiasMap = new Map<string, string>();
+        ventas.forEach(v => {
+          if (v.descripcionFamilia) {
+            familiasMap.set(v.familia || '', v.descripcionFamilia);
+          }
+        });
+        
+        // Mapeo de nombres comunes a nombres de familias
+        const mapeoFamilias: Record<string, string[]> = {
+          'pantalón': ['pantalon', 'pantalones', 'pant'],
+          'pantalones': ['pantalon', 'pantalones', 'pant'],
+          'jersey': ['jersey', 'jerseys', 'jersei'],
+          'jerseys': ['jersey', 'jerseys', 'jersei'],
+          'vestido': ['vestido', 'vestidos'],
+          'vestidos': ['vestido', 'vestidos'],
+          'camiseta': ['camiseta', 'camisetas', 'tshirt'],
+          'camisetas': ['camiseta', 'camisetas', 'tshirt'],
+          'top': ['top', 'tops'],
+          'tops': ['top', 'tops'],
+          'falda': ['falda', 'faldas'],
+          'faldas': ['falda', 'faldas'],
+          'blusa': ['blusa', 'blusas'],
+          'blusas': ['blusa', 'blusas'],
+          'abrigo': ['abrigo', 'abrigos'],
+          'abrigos': ['abrigo', 'abrigos'],
+        };
+        
+        const variaciones = mapeoFamilias[familiaNombre] || [familiaNombre];
+        
+        // Buscar familia con más flexibilidad - también buscar parcialmente
+        let familiaEncontrada = Array.from(familiasMap.entries()).find(([codigo, nombre]) => {
+          const nombreLower = nombre.toLowerCase();
+          return variaciones.some(v => nombreLower.includes(v));
+        });
+        
+        // Si no encuentra exacta, buscar cualquier familia que contenga la palabra
+        if (!familiaEncontrada) {
+          const palabraBase = familiaNombre.replace(/es$/, '').replace(/ón$/, 'on');
+          familiaEncontrada = Array.from(familiasMap.entries()).find(([codigo, nombre]) => {
+            const nombreLower = nombre.toLowerCase();
+            return nombreLower.includes(palabraBase) || nombreLower.includes(familiaNombre!.toLowerCase());
+          });
+        }
+        
+        console.log(`🔍 Familia encontrada: ${familiaEncontrada ? familiaEncontrada[1] : 'ninguna'}`);
+        console.log(`🔍 Todas las familias disponibles: ${Array.from(familiasMap.values()).slice(0, 10).join(', ')}`);
+        
+        if (familiaEncontrada) {
+          const ventasFamilia = ventasFiltradas.filter(v => 
+            (v.familia === familiaEncontrada![0] || v.descripcionFamilia === familiaEncontrada![1]) &&
+            (v.cantidad || 0) > 0
+          );
+          
+          console.log(`🔍 Ventas de familia ${familiaEncontrada[1]} en ${año}: ${ventasFamilia.length}`);
+          
+          if (ventasFamilia.length > 0) {
+            const tallasMap = new Map<string, number>();
+            ventasFamilia.forEach(v => {
+              const talla = v.talla ? String(v.talla).trim() : 'Sin Talla';
+              tallasMap.set(talla, (tallasMap.get(talla) || 0) + (v.cantidad || 0));
+            });
+            
+            const topTallas = Array.from(tallasMap.entries())
+              .map(([talla, cantidad]) => ({ talla, cantidad }))
+              .sort((a, b) => b.cantidad - a.cantidad);
+            
+            if (topTallas.length > 0) {
+              const totalUnidades = topTallas.reduce((sum, t) => sum + t.cantidad, 0);
+              console.log(`✅ Respuesta generada para talla de ${familiaEncontrada[1]} en ${año}: ${topTallas[0].talla}`);
+              return `En ${año}, la talla más vendida de ${familiaEncontrada[1]} fue ${topTallas[0].talla} con ${topTallas[0].cantidad.toLocaleString()} unidades vendidas (de un total de ${totalUnidades.toLocaleString()} unidades de ${familiaEncontrada[1]}).`;
+            }
+          } else {
+            return `No encontré ventas de ${familiaNombre} en ${año}.`;
+          }
+        } else {
+          // Si no encontró la familia exacta, buscar todas las familias disponibles
+          const familiasDisponibles = Array.from(new Set(ventasFiltradas.map(v => v.descripcionFamilia).filter(Boolean))).slice(0, 10);
+          return `No encontré una familia exacta llamada "${familiaNombre}". Familias disponibles en ${año}: ${familiasDisponibles.join(', ')}.`;
+        }
+      } else if (lowerMessage.includes('talla') && (lowerMessage.includes('más') || lowerMessage.includes('mas') || lowerMessage.includes('máxima') || lowerMessage.includes('maxima'))) {
+        // Pregunta sobre talla más vendida en general para ese año
+        const tallasMap = new Map<string, number>();
+        ventasFiltradas.filter(v => (v.cantidad || 0) > 0).forEach(v => {
+          const talla = v.talla ? String(v.talla).trim() : 'Sin Talla';
+          tallasMap.set(talla, (tallasMap.get(talla) || 0) + (v.cantidad || 0));
+        });
+        
+        const topTallas = Array.from(tallasMap.entries())
+          .map(([talla, cantidad]) => ({ talla, cantidad }))
+          .sort((a, b) => b.cantidad - a.cantidad)
+          .slice(0, 5);
+        
+        if (topTallas.length > 0) {
+          return `En ${año}, las tallas más vendidas fueron:\n${topTallas.map((t, i) => `${i + 1}. ${t.talla}: ${t.cantidad.toLocaleString()} unidades`).join('\n')}`;
+        }
+      } else {
+        // Pregunta general sobre el año
+        const totalVentasAño = ventasFiltradas.reduce((sum, v) => sum + (v.cantidad || 0), 0);
+        const totalBeneficioAño = ventasFiltradas.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+        return `En ${año}: ${totalVentasAño.toLocaleString()} unidades vendidas, €${totalBeneficioAño.toLocaleString()} de beneficio total.`;
+      }
+    } else {
+      // Año encontrado pero sin datos
+      const temporadasDisponibles = Array.from(new Set(ventas.map(v => v.temporada).filter(Boolean))).slice(0, 10);
+      return `No encontré datos para el año ${año}. Las temporadas disponibles son: ${temporadasDisponibles.join(', ')}.`;
+    }
+  }
   
   // 1. Consultas sobre cantidad de tiendas
   if (lowerMessage.includes('cuántas') || lowerMessage.includes('cuantas')) {
@@ -632,6 +805,161 @@ function calculateDirectResponse(
         return `Encontré ${tiendasEncontradas.length} tienda(s) que contienen "${busqueda}": ${tiendasEncontradas.join(', ')}.`;
       }
       return `No encontré ninguna tienda que contenga "${busqueda}".`;
+    }
+  }
+  
+  // 9. Consultas sobre ventas de una tienda específica
+  const ventasTiendaMatch = lowerMessage.match(/ventas?\s+(?:de\s+)?(?:la\s+)?tienda\s+["']?([^"']+)["']?/i);
+  if (ventasTiendaMatch) {
+    const nombreTienda = ventasTiendaMatch[1]?.toLowerCase();
+    if (nombreTienda) {
+      const tiendasCoincidentes = Array.from(tiendasPorNombre).filter(t => 
+        t && t.toLowerCase().includes(nombreTienda)
+      );
+      if (tiendasCoincidentes.length > 0) {
+        const respuestas = tiendasCoincidentes.map(tienda => {
+          const ventasTienda = ventas.filter(v => v.tienda === tienda);
+          const unidades = ventasTienda.reduce((sum, v) => sum + (v.cantidad || 0), 0);
+          const beneficio = ventasTienda.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+          return `${tienda}: ${unidades.toLocaleString()} unidades, €${beneficio.toLocaleString()}`;
+        });
+        return `Ventas de las tiendas encontradas:\n${respuestas.join('\n')}`;
+      }
+    }
+  }
+  
+  // 10. Consultas sobre ventas de una familia específica
+  const ventasFamiliaMatch = lowerMessage.match(/ventas?\s+(?:de\s+)?(?:la\s+)?familia\s+["']?([^"']+)["']?/i);
+  if (ventasFamiliaMatch) {
+    const nombreFamilia = ventasFamiliaMatch[1]?.toLowerCase();
+    if (nombreFamilia) {
+      const familiasCoincidentes = Array.from(new Set(ventas.map(v => v.descripcionFamilia || v.familia).filter(Boolean))).filter(f => 
+        f && f.toLowerCase().includes(nombreFamilia)
+      );
+      if (familiasCoincidentes.length > 0) {
+        const respuestas = familiasCoincidentes.map(familia => {
+          const ventasFamilia = ventas.filter(v => (v.descripcionFamilia || v.familia) === familia);
+          const unidades = ventasFamilia.reduce((sum, v) => sum + (v.cantidad || 0), 0);
+          const beneficio = ventasFamilia.reduce((sum, v) => sum + (v.subtotal || 0), 0);
+          return `${familia}: ${unidades.toLocaleString()} unidades, €${beneficio.toLocaleString()}`;
+        });
+        return `Ventas de las familias encontradas:\n${respuestas.join('\n')}`;
+      }
+    }
+  }
+  
+  // 11. Consultas generales sobre información disponible
+  if (lowerMessage.includes('qué') || lowerMessage.includes('que')) {
+    if (lowerMessage.includes('puedo') || lowerMessage.includes('puedes') || lowerMessage.includes('ayuda')) {
+      return `Puedo ayudarte con:
+- Información sobre tiendas (cantidad, ventas por tienda, comparaciones)
+- Información sobre familias de productos (ventas, top familias)
+- Información sobre temporadas (ventas por temporada)
+- Información sobre ventas (totales, online vs física, devoluciones)
+- Información sobre productos (top productos, ventas por producto)
+- Comparaciones y análisis de rendimiento
+- Crear visualizaciones (gráficos de barras, líneas, pastel, tablas)
+- Cualquier otra pregunta sobre tus datos de retail`;
+    }
+  }
+  
+  // 12. Consultas sobre resumen general
+  if (lowerMessage.includes('resumen') || lowerMessage.includes('resume') || lowerMessage.includes('dame un resumen')) {
+    return `RESUMEN GENERAL DE TUS DATOS:
+📊 Ventas: ${totalVentas.toLocaleString()} unidades vendidas, €${totalBeneficio.toLocaleString()} de beneficio total
+📦 Devoluciones: ${devoluciones.toLocaleString()} unidades (${tasaDevolucion}% de tasa)
+🏪 Tiendas: ${tiendasUnicas} tiendas únicas (${tiendasOnlineUnicas} online, ${tiendasFisicasUnicas} físicas)
+👔 Familias: ${familiasUnicas} familias de productos únicas
+📅 Temporadas: ${temporadasUnicas} temporadas diferentes
+📈 Promedio: ${tiendasUnicas > 0 ? (totalVentas / tiendasUnicas).toFixed(0) : '0'} unidades por tienda`;
+  }
+  
+  // 13. Consultas sobre tallas más vendidas por familia
+  const tallaFamiliaMatch = lowerMessage.match(/(?:talla|tallas?)\s+(?:de\s+)?(?:la\s+)?(\w+)\s+(?:más|mas|máxima|maxima)\s+venta/i);
+  const familiaTallaMatch = lowerMessage.match(/(?:qué|que)\s+talla\s+(?:de\s+)?(?:la\s+)?(\w+)\s+(?:ha\s+)?(?:sido|fue|es)\s+(?:la\s+)?(?:más|mas|máxima|maxima)\s+venta/i);
+  
+  if (tallaFamiliaMatch || familiaTallaMatch) {
+    const familiaNombre = (tallaFamiliaMatch?.[1] || familiaTallaMatch?.[1])?.toLowerCase();
+    if (familiaNombre) {
+      // Buscar familia por nombre o código
+      const familiasCoincidentes = Array.from(new Set(ventas.map(v => ({
+        codigo: v.familia,
+        nombre: v.descripcionFamilia
+      })))).filter(f => 
+        f.nombre && f.nombre.toLowerCase().includes(familiaNombre) ||
+        f.codigo && f.codigo.toLowerCase().includes(familiaNombre)
+      );
+      
+      if (familiasCoincidentes.length > 0) {
+        const respuestas = familiasCoincidentes.map(familia => {
+          const ventasFamilia = ventas.filter(v => 
+            (v.descripcionFamilia === familia.nombre || v.familia === familia.codigo) &&
+            (v.cantidad || 0) > 0
+          );
+          
+          // Agrupar por talla
+          const tallasMap = new Map<string, number>();
+          ventasFamilia.forEach(v => {
+            const talla = v.talla ? String(v.talla).trim() : 'Sin Talla';
+            tallasMap.set(talla, (tallasMap.get(talla) || 0) + (v.cantidad || 0));
+          });
+          
+          const topTallas = Array.from(tallasMap.entries())
+            .map(([talla, cantidad]) => ({ talla, cantidad }))
+            .sort((a, b) => b.cantidad - a.cantidad)
+            .slice(0, 5);
+          
+          if (topTallas.length > 0) {
+            const familiaNombreMostrar = familia.nombre || familia.codigo || 'Desconocida';
+            return `${familiaNombreMostrar}: ${topTallas.map(t => `${t.talla} (${t.cantidad.toLocaleString()} unidades)`).join(', ')}`;
+          }
+          return null;
+        }).filter(Boolean);
+        
+        if (respuestas.length > 0) {
+          return `Tallas más vendidas:\n${respuestas.join('\n')}`;
+        }
+      }
+    }
+  }
+  
+  // 14. Consultas sobre tallas más vendidas en general
+  if (lowerMessage.includes('talla') && (lowerMessage.includes('más') || lowerMessage.includes('mas') || lowerMessage.includes('máxima') || lowerMessage.includes('maxima'))) {
+    if (lowerMessage.includes('venta') || lowerMessage.includes('vendida')) {
+      const tallasMap = new Map<string, number>();
+      ventas.filter(v => (v.cantidad || 0) > 0).forEach(v => {
+        const talla = v.talla ? String(v.talla).trim() : 'Sin Talla';
+        tallasMap.set(talla, (tallasMap.get(talla) || 0) + (v.cantidad || 0));
+      });
+      
+      const topTallas = Array.from(tallasMap.entries())
+        .map(([talla, cantidad]) => ({ talla, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 10);
+      
+      if (topTallas.length > 0) {
+        return `Las ${topTallas.length} tallas más vendidas son:\n${topTallas.map((t, i) => `${i + 1}. ${t.talla}: ${t.cantidad.toLocaleString()} unidades`).join('\n')}`;
+      }
+    }
+  }
+  
+  // 14. Consultas sobre tallas más vendidas en general (solo si NO hay año en la consulta)
+  if (lowerMessage.includes('talla') && (lowerMessage.includes('más') || lowerMessage.includes('mas') || lowerMessage.includes('máxima') || lowerMessage.includes('maxima'))) {
+    if (lowerMessage.includes('venta') || lowerMessage.includes('vendida')) {
+      const tallasMap = new Map<string, number>();
+      ventas.filter(v => (v.cantidad || 0) > 0).forEach(v => {
+        const talla = v.talla ? String(v.talla).trim() : 'Sin Talla';
+        tallasMap.set(talla, (tallasMap.get(talla) || 0) + (v.cantidad || 0));
+      });
+      
+      const topTallas = Array.from(tallasMap.entries())
+        .map(([talla, cantidad]) => ({ talla, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 10);
+      
+      if (topTallas.length > 0) {
+        return `Las ${topTallas.length} tallas más vendidas son:\n${topTallas.map((t, i) => `${i + 1}. ${t.talla}: ${t.cantidad.toLocaleString()} unidades`).join('\n')}`;
+      }
     }
   }
   
@@ -816,17 +1144,13 @@ async function getConversationalResponse(
   productos: ProductosData[],
   traspasos: TraspasosData[]
 ): Promise<string | null> {
-  // Primero intentar calcular respuesta directa
-  const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
-  if (directResponse) {
-    return directResponse;
-  }
-  
   if (!openai) {
+    console.log(`⚠️ OpenAI no está disponible`);
     return null;
   }
 
   try {
+    console.log(`📊 Calculando estadísticas detalladas para contexto de OpenAI...`);
     // Calcular estadísticas detalladas
     const stats = calculateDetailedStats(ventas, productos, traspasos);
 
@@ -907,15 +1231,23 @@ INSTRUCCIONES IMPORTANTES:
    - Estadísticas y promedios
    - Tendencias y patrones
    - Recomendaciones basadas en los datos
+   - Preguntas filtradas por año/temporada (ej: "qué talla de pantalón fue la más vendida en 2023")
+   - Preguntas sobre tallas más vendidas por familia
    - Cualquier otra consulta relacionada con los datos de retail
 3. Usa los datos calculados arriba para responder preguntas específicas
-4. Si el usuario pregunta sobre algo específico (ej: "ventas de la tienda X"), calcula y proporciona la información exacta
-5. Responde de manera natural, conversacional y útil en español
-6. NO uses formato JSON ni estructuras de código. Solo texto conversacional
-7. Sé amigable, profesional y útil
-8. Si no tienes suficiente información para responder completamente, indica lo que SÍ puedes proporcionar basándote en los datos disponibles
-9. Si el usuario hace una pregunta muy general, proporciona un resumen útil de los datos más relevantes`;
+4. Si el usuario pregunta sobre algo específico (ej: "ventas de la tienda X", "talla más vendida de pantalones en 2023"), calcula y proporciona la información exacta basándote en los datos disponibles
+5. Para preguntas con filtros temporales (años), busca en el campo "temporada" y en "fechaVenta" si está disponible
+6. Para preguntas sobre familias de productos, busca coincidencias flexibles en "descripcionFamilia" (ej: "pantalón" puede encontrarse en "PANTALONES")
+7. Responde de manera natural, conversacional y útil en español
+8. NO uses formato JSON ni estructuras de código. Solo texto conversacional
+9. Sé amigable, profesional y útil
+10. Si no tienes suficiente información para responder completamente, indica lo que SÍ puedes proporcionar basándote en los datos disponibles
+11. Si el usuario hace una pregunta muy general, proporciona un resumen útil de los datos más relevantes
+12. SIEMPRE intenta responder la pregunta, incluso si requiere calcular datos específicos que no están en el resumen
+13. Si el usuario pregunta sobre algo específico (ej: "qué talla de pantalón fue la más vendida en 2023"), usa los datos proporcionados para calcular y dar una respuesta precisa y exacta
+14. Combina tu conocimiento general sobre retail y análisis de datos con los datos específicos del Excel para dar respuestas completas y útiles`;
 
+    console.log(`🚀 Enviando solicitud a OpenAI...`);
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -923,26 +1255,28 @@ INSTRUCCIONES IMPORTANTES:
         { role: "user", content: message },
       ],
       temperature: 0.7,
-      max_tokens: 1500,
+      max_tokens: 2000,
     });
 
     const content = response.choices[0]?.message?.content;
-    return content || null;
+    if (content) {
+      console.log(`✅ Respuesta recibida de OpenAI: ${content.substring(0, 100)}...`);
+      return content;
+    }
+    
+    console.log(`⚠️ OpenAI no devolvió contenido`);
+    return null;
   } catch (error: any) {
-    console.error("Error en respuesta conversacional de OpenAI:", error);
+    console.error("❌ Error en respuesta conversacional de OpenAI:", error);
     console.error("Error details:", {
       message: error.message,
       status: error.status,
       code: error.code,
-      type: error.type
+      type: error.type,
+      response: error.response?.data
     });
     
-    // Si falla OpenAI, intentar calcular respuesta directa
-    const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
-    if (directResponse) {
-      return directResponse;
-    }
-    
+    // Si falla OpenAI, retornar null para que se use el fallback
     return null;
   }
 }
@@ -968,17 +1302,17 @@ export async function processChatbotRequest(
 ): Promise<VisualizationResponse> {
   const { message } = request;
 
-  // Si OpenAI está disponible, intentar respuesta conversacional primero
+  console.log(`🤖 Procesando solicitud del chatbot: "${message}"`);
+
+  // PRIORIDAD 1: Si OpenAI está disponible, usarlo primero para combinar conocimiento con datos
   if (openai) {
     try {
+      console.log(`✅ Usando OpenAI para procesar la consulta...`);
       const conversationalResponse = await getConversationalResponse(message, ventas, productos, traspasos);
       
       if (conversationalResponse) {
         // Si el usuario quiere una visualización específica, intentar generarla también
-        // Pero solo si la pregunta NO es una pregunta simple de información
-        const isQuestion = message.toLowerCase().match(/^(cuántas?|cuántos?|cuál|quién|qué|dónde|cuando|como|como está|explica|dime|menciona)/);
-        
-        if (wantsVisualization(message) && !isQuestion) {
+        if (wantsVisualization(message)) {
           try {
             const availableData = {
               ventas: ventas.length,
@@ -1023,7 +1357,7 @@ export async function processChatbotRequest(
         };
       }
     } catch (error: any) {
-      console.error("Error en processChatbotRequest:", error);
+      console.error("❌ Error en processChatbotRequest con OpenAI:", error);
       console.error("Error details:", {
         message: error.message,
         status: error.status,
@@ -1031,27 +1365,61 @@ export async function processChatbotRequest(
         type: error.type
       });
       
-      // Si falla OpenAI, intentar calcular respuesta directa
-      const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
-      if (directResponse) {
-        return {
-          message: directResponse,
-        };
-      }
-      
       // Continuar con fallback si OpenAI falla
+      console.log(`⚠️ OpenAI falló, usando fallback con cálculo directo...`);
     }
+  } else {
+    console.log(`⚠️ OpenAI no está configurado, usando cálculo directo...`);
   }
 
-  // Fallback: Si no hay OpenAI o falló, intentar calcular respuesta directa primero
+  // FALLBACK: Si OpenAI no está disponible o falló, intentar respuesta directa
+  console.log(`🔍 Intentando calcular respuesta directa...`);
   const directResponse = calculateDirectResponse(message, ventas, productos, traspasos);
   if (directResponse) {
+    console.log(`✅ Respuesta directa encontrada`);
+    // Si también quiere una visualización, intentar generarla
+    if (wantsVisualization(message)) {
+      try {
+        const availableData = {
+          ventas: ventas.length,
+          productos: productos.length,
+          traspasos: traspasos.length,
+        };
+
+        let analysis = openai ? await analyzeRequestWithAI(message, availableData) : null;
+        if (!analysis) {
+          analysis = analyzeRequest(message);
+        }
+
+        const data = generateVisualizationData(
+          analysis.type,
+          analysis.config,
+          ventas,
+          productos,
+          traspasos
+        );
+
+        if (data.length > 0) {
+          return {
+            message: directResponse,
+            visualization: {
+              type: analysis.type,
+              config: analysis.config,
+              data,
+            },
+          };
+        }
+      } catch (vizError: any) {
+        console.error("Error generando visualización:", vizError);
+      }
+    }
+    
     return {
       message: directResponse,
     };
   }
 
-  // Fallback: Si no hay OpenAI o falló, intentar generar visualización si la pide
+  // Fallback: Intentar generar visualización si la pide
   if (wantsVisualization(message)) {
     const availableData = {
       ventas: ventas.length,
@@ -1082,8 +1450,9 @@ export async function processChatbotRequest(
     }
   }
 
-  // Respuesta por defecto
+  // Si llegamos aquí y tenemos datos, proporcionar un resumen útil
+  const stats = calculateDetailedStats(ventas, productos, traspasos);
   return {
-    message: "Lo siento, no pude procesar tu solicitud. ¿Puedes ser más específico sobre qué necesitas? Puedo ayudarte a entender tus datos o crear visualizaciones específicas.",
+    message: `Hola! Puedo ayudarte a entender tus datos. Tienes ${stats.tiendasUnicas} tiendas, ${stats.familiasUnicas} familias de productos, y ${stats.totalVentas.toLocaleString()} unidades vendidas en total. ¿Qué te gustaría saber específicamente? Puedo responder preguntas sobre ventas, tiendas, productos, familias, temporadas, devoluciones, o cualquier otra métrica relacionada con tus datos.`,
   };
 }

@@ -57,6 +57,7 @@ export const productosSchema = z.object({
   color: z.string().optional(),
   temporada: z.string().optional(),
   fechaAlmacen: z.string().optional(), // Fecha REAL entrada en almacén
+  tema: z.string().optional(), // Tema_temporada from Excel
 });
 
 export type ProductosData = z.infer<typeof productosSchema>;
@@ -69,6 +70,7 @@ export const traspasosSchema = z.object({
   tienda: z.string().optional(),
   fechaEnviado: z.string().optional(),
   urlImage: z.string().optional(),
+  talla: z.string().optional(), // Talla del producto traspasado
 });
 
 export type TraspasosData = z.infer<typeof traspasosSchema>;

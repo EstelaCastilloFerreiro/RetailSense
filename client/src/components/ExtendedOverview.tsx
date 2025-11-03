@@ -15,8 +15,19 @@ import {
   ResponsiveContainer,
   Legend,
   Cell,
+  LineChart,
+  Line,
 } from "recharts";
 import { CHART_COLORS, getValueColor } from "@/lib/colors";
+import { formatNumber, formatCurrency, formatPercentage } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface ExtendedDashboardData {
   alcance: {
@@ -65,6 +76,43 @@ interface ExtendedDashboardData {
     talla: string;
     cantidad: number;
   }>;
+  ventasPorTallaConTemporada?: Array<Record<string, string | number>>;
+  pendientesEntrega?: Array<{
+    talla: string;
+    cantidad: number;
+  }>;
+  entradasAlmacenPorTema?: Array<{
+    tema: string;
+    temporada: string;
+    mes: string;
+    talla: string;
+    cantidadEntrada: number;
+    cantidadTraspasada?: number;
+    cantidadVendida?: number;
+  }>;
+  comparacionEnviadoVsVentasPorTema?: Array<{
+    tema: string;
+    temporada: string;
+    talla: string;
+    cantidadEnviado: number;
+    cantidadVentas: number;
+  }>;
+  analisisTemporal?: {
+    datos: Array<{
+      codigoUnico: string;
+      tema: string;
+      talla: string;
+      tiendaEnvio: string;
+      fechaEntradaAlmacen: string;
+      fechaEnviado: string;
+      fechaPrimeraVenta: string | null;
+      diasEntradaEnvio: number;
+      diasEnvioPrimeraVenta: number | null;
+    }>;
+    promedioDiasEntradaEnvio: number;
+    promedioDiasEnvioPrimeraVenta: number | null;
+    totalProductos: number;
+  };
   kpisRotacion?: {
     tiendaMayorRotacion: string;
     tiendaMayorRotacionDias: number;
@@ -79,6 +127,38 @@ interface ExtendedDashboardData {
     desviacionEstandar: number;
     totalProductos: number;
   };
+  cantidadPedidaPorMesTalla?: Array<{
+    mes: string;
+    talla: string;
+    cantidad: number;
+  }>;
+  ventasVsTraspasosPorTienda?: Array<{
+    tienda: string;
+    temporada: string;
+    ventas: number;
+    traspasos: number;
+  }>;
+  resumenVentasVsTraspasosTemporada?: Array<{
+    temporada: string;
+    ventas: number;
+    traspasos: number;
+    diferencia: number;
+    eficiencia: number;
+  }>;
+  totalesPorTienda?: Array<{
+    tienda: string;
+    ventas: number;
+    traspasos: number;
+    diferencia: number;
+    devoluciones: number;
+    eficiencia: number;
+    ratioDevolucion: number;
+    detallePorTemporada?: Array<{
+      temporada: string;
+      ventas: number;
+      traspasos: number;
+    }>;
+  }>;
 }
 
 export default function ExtendedOverview() {
@@ -454,9 +534,45 @@ export default function ExtendedOverview() {
       {/* Ventas por Talla */}
       {data.ventasPorTalla.length > 0 && (
         <VisualizationCard 
-          title="Unidades Vendidas por Talla (Top 20)"
+          title="Unidades Vendidas por Talla"
           id="ventas-talla"
+          className="xl:col-span-2"
         >
+          {data.ventasPorTallaConTemporada && data.ventasPorTallaConTemporada.length > 0 ? (
+            // Mostrar gráfico apilado por temporada
+            (() => {
+              const temporadas = Array.from(new Set(
+                data.ventasPorTallaConTemporada.flatMap(item => 
+                  Object.keys(item).filter(k => k !== 'talla' && typeof item[k] === 'number')
+                )
+              )).sort();
+              
+              const chartData = data.ventasPorTallaConTemporada.slice(0, 30);
+              const alturaDinamica = Math.max(400, Math.min(800, chartData.length * 30));
+              
+              return (
+                <ResponsiveContainer width="100%" height={alturaDinamica}>
+                  <BarChart data={chartData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="talla" type="category" width={80} />
+                    <Tooltip
+                      formatter={(value: number) => formatNumber(value)}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Legend />
+                    {temporadas.map((temp, idx) => {
+                      const color = getValueColor(idx, 0, temporadas.length - 1);
+                      return (
+                        <Bar key={temp} dataKey={temp} name={temp} stackId="a" fill={color} />
+                      );
+                    })}
+                  </BarChart>
+                </ResponsiveContainer>
+              );
+            })()
+          ) : (
+            // Fallback: gráfico simple sin temporada
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.ventasPorTalla.slice(0, 20)}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -466,18 +582,551 @@ export default function ExtendedOverview() {
                 formatter={(value: number) => value.toLocaleString()}
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
               />
-              <Bar dataKey="cantidad" name="Unidades">
-                {data.ventasPorTalla.slice(0, 20).map((entry, index) => {
-                  const values = data.ventasPorTalla.slice(0, 20).map(v => v.cantidad);
-                  const max = Math.max(...values);
-                  const min = Math.min(...values);
+                <Bar dataKey="cantidad" name="Unidades">
+                  {data.ventasPorTalla.slice(0, 20).map((entry, index) => {
+                    const values = data.ventasPorTalla.slice(0, 20).map(v => v.cantidad);
+                    const max = Math.max(...values);
+                    const min = Math.min(...values);
+                    return (
+                      <Cell key={`cell-${index}`} fill={getValueColor(entry.cantidad, min, max)} />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </VisualizationCard>
+      )}
+
+      {/* Pendientes de Entrega */}
+      {data.pendientesEntrega && data.pendientesEntrega.length > 0 ? (
+        <VisualizationCard 
+          title="Pendientes de Entrega"
+          id="pendientes-entrega"
+        >
+          <div className="space-y-4">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Talla</TableHead>
+                    <TableHead className="text-right">Cantidad Pendiente</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.pendientesEntrega.map((item) => (
+                    <TableRow key={item.talla}>
+                      <TableCell className="font-medium">{item.talla}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(item.cantidad)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">Total Pendiente</p>
+                <p className="text-lg font-bold font-mono">
+                  {formatNumber(data.pendientesEntrega.reduce((sum, p) => sum + p.cantidad, 0))}
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">Tallas Diferentes</p>
+                <p className="text-lg font-bold font-mono">{data.pendientesEntrega.length}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">Promedio por Talla</p>
+                <p className="text-lg font-bold font-mono">
+                  {formatNumber(
+                    data.pendientesEntrega.length > 0
+                      ? data.pendientesEntrega.reduce((sum, p) => sum + p.cantidad, 0) / data.pendientesEntrega.length
+                      : 0
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </VisualizationCard>
+      ) : (
+        <VisualizationCard 
+          title="Pendientes de Entrega"
+          id="pendientes-entrega"
+        >
+          <div className="text-center p-8 text-muted-foreground">
+            <p className="text-sm">No hay productos pendientes de entrega.</p>
+            <p className="text-xs mt-2">Todos los productos tienen fecha de entrada en almacén asignada.</p>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* Sección: Entradas almacén y traspasos */}
+      {(data.analisisTemporal || (data.entradasAlmacenPorTema && data.entradasAlmacenPorTema.length > 0)) && (
+        <div className="xl:col-span-3">
+          <div className="mb-6 pb-4 border-b-2">
+            <h3 className="text-xl font-bold text-center">Entradas almacén y traspasos</h3>
+          </div>
+        </div>
+      )}
+
+      {/* Análisis Temporal: Entrada → Envío → Primera Venta */}
+      {data.analisisTemporal && data.analisisTemporal.datos.length > 0 ? (
+        <VisualizationCard 
+          title="Análisis Temporal: Entrada Almacén → Envío → Primera Venta"
+          id="analisis-temporal"
+          className="xl:col-span-3"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center p-3 border rounded-md bg-card">
+                <p className="text-xs text-muted-foreground mb-1">Promedio días Entrada→Envío</p>
+                <p className="text-lg font-bold font-mono">
+                  {data.analisisTemporal.promedioDiasEntradaEnvio.toFixed(1)} días
+                </p>
+              </div>
+              <div className="text-center p-3 border rounded-md bg-card">
+                <p className="text-xs text-muted-foreground mb-1">Promedio días Envío→Primera Venta</p>
+                <p className="text-lg font-bold font-mono">
+                  {data.analisisTemporal.promedioDiasEnvioPrimeraVenta !== null
+                    ? `${data.analisisTemporal.promedioDiasEnvioPrimeraVenta.toFixed(1)} días`
+                    : 'N/A'}
+                </p>
+              </div>
+              <div className="text-center p-3 border rounded-md bg-card">
+                <p className="text-xs text-muted-foreground mb-1">Total productos analizados</p>
+                <p className="text-lg font-bold font-mono">{data.analisisTemporal.totalProductos}</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Código Único</TableHead>
+                    <TableHead>Tema</TableHead>
+                    <TableHead>Talla</TableHead>
+                    <TableHead>Tienda Envío</TableHead>
+                    <TableHead>Fecha Entrada Almacén</TableHead>
+                    <TableHead>Fecha Enviado</TableHead>
+                    <TableHead>Fecha Primera Venta</TableHead>
+                    <TableHead className="text-right">Días Entrada-Envío</TableHead>
+                    <TableHead className="text-right">Días Envío-Primera Venta</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.analisisTemporal.datos.map((item, idx) => (
+                    <TableRow key={`${item.codigoUnico}-${item.talla}-${idx}`}>
+                      <TableCell className="font-mono text-xs">{item.codigoUnico}</TableCell>
+                      <TableCell>{item.tema}</TableCell>
+                      <TableCell>{item.talla}</TableCell>
+                      <TableCell>{item.tiendaEnvio}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {new Date(item.fechaEntradaAlmacen).toLocaleDateString('es-ES')}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {new Date(item.fechaEnviado).toLocaleDateString('es-ES')}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {item.fechaPrimeraVenta 
+                          ? new Date(item.fechaPrimeraVenta).toLocaleDateString('es-ES')
+                          : 'Sin ventas'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{item.diasEntradaEnvio}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {item.diasEnvioPrimeraVenta !== null ? item.diasEnvioPrimeraVenta : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </VisualizationCard>
+      ) : (
+        <VisualizationCard 
+          title="Análisis Temporal: Entrada Almacén → Envío → Primera Venta"
+          id="analisis-temporal"
+          className="xl:col-span-3"
+        >
+          <div className="text-center p-8 text-muted-foreground">
+            <p className="text-sm">No hay datos suficientes para el análisis temporal.</p>
+            <p className="text-xs mt-2">Se requiere información de productos con fecha de almacén, traspasos y ventas.</p>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* Entradas almacén por tema/temporada */}
+      {data.entradasAlmacenPorTema && data.entradasAlmacenPorTema.length > 0 ? (
+        (() => {
+          // Agrupar por tema
+          const temas = Array.from(new Set(data.entradasAlmacenPorTema.map(e => e.tema))).sort();
+          
+          return (
+            <>
+              {temas.map(tema => {
+                const entradasTema = data.entradasAlmacenPorTema.filter(e => e.tema === tema);
+                if (entradasTema.length === 0) return null;
+                
+                // Obtener temporada del tema
+                const temporadaTema = entradasTema[0]?.temporada || '';
+                
+                // Crear tabla pivot: mes como filas, talla como columnas
+                const meses = Array.from(new Set(entradasTema.map(e => e.mes))).sort();
+                const tallas = Array.from(new Set(entradasTema.map(e => e.talla))).sort();
+                
+                const pivotData = new Map<string, Map<string, number>>();
+                entradasTema.forEach(e => {
+                  if (!pivotData.has(e.mes)) {
+                    pivotData.set(e.mes, new Map());
+                  }
+                  pivotData.get(e.mes)!.set(e.talla, (pivotData.get(e.mes)!.get(e.talla) || 0) + e.cantidadEntrada);
+                });
+                
+                const totalEntrada = entradasTema.reduce((sum, e) => sum + e.cantidadEntrada, 0);
+                
+                return (
+                  <VisualizationCard 
+                    key={tema}
+                    title={`Entrada Almacén - ${tema}`}
+                    id={`entrada-almacen-${tema}`}
+                    className="xl:col-span-2"
+                  >
+                    <div className="space-y-4">
+                      {/* Gráfico de comparación Enviado vs Ventas si está disponible */}
+                      {data.comparacionEnviadoVsVentasPorTema && data.comparacionEnviadoVsVentasPorTema.length > 0 && (
+                        (() => {
+                          const comparacionTema = data.comparacionEnviadoVsVentasPorTema.filter(c => c.tema === tema);
+                          if (comparacionTema.length === 0) return null;
+                          
+                          // Agrupar por talla
+                          const comparacionPorTalla = comparacionTema.reduce((acc, item) => {
+                            if (!acc.has(item.talla)) {
+                              acc.set(item.talla, { talla: item.talla, enviado: 0, ventas: 0 });
+                            }
+                            const data = acc.get(item.talla)!;
+                            data.enviado += item.cantidadEnviado;
+                            data.ventas += item.cantidadVentas;
+                            return acc;
+                          }, new Map<string, { talla: string; enviado: number; ventas: number }>());
+                          
+                          const chartData = Array.from(comparacionPorTalla.values()).sort((a, b) => a.talla.localeCompare(b.talla));
+                          const alturaDinamica = Math.max(400, Math.min(800, chartData.length * 30));
+                          
+                          return (
+                            <div className="mb-4">
+                              <h4 className="text-sm font-semibold mb-2">Enviado vs Ventas - {tema} ({temporadaTema})</h4>
+                              <ResponsiveContainer width="100%" height={alturaDinamica}>
+                                <BarChart data={chartData} layout="vertical">
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis type="number" />
+                                  <YAxis dataKey="talla" type="category" width={80} />
+                                  <Tooltip
+                                    formatter={(value: number) => formatNumber(value)}
+                                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                                  />
+                                  <Legend />
+                                  <Bar dataKey="enviado" name="Enviado Almacén" fill="#800080" />
+                                  <Bar dataKey="ventas" name="Ventas" fill="#000080" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          );
+                        })()
+                      )}
+                      
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="sticky left-0 bg-card z-10">Mes</TableHead>
+                              {tallas.map(talla => (
+                                <TableHead key={talla} className="text-right">
+                                  {talla}
+                                </TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {meses.map(mes => {
+                              const rowData = pivotData.get(mes)!;
+                              return (
+                                <TableRow key={mes}>
+                                  <TableCell className="font-medium sticky left-0 bg-card z-10">{mes}</TableCell>
+                                  {tallas.map(talla => (
+                                    <TableCell key={talla} className="text-right font-mono">
+                                      {formatNumber(rowData.get(talla) || 0)}
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        <strong>Total Entrada Almacén:</strong> {formatNumber(totalEntrada)}
+                      </div>
+                    </div>
+                  </VisualizationCard>
+                );
+              })}
+            </>
+          );
+        })()
+      ) : (
+        <VisualizationCard 
+          title="Entradas almacén y traspasos"
+          id="entradas-almacen-general"
+          className="xl:col-span-2"
+        >
+          <div className="text-center p-8 text-muted-foreground">
+            <p className="text-sm">No hay datos de entradas almacén por tema disponibles.</p>
+            <p className="text-xs mt-2">Se requiere información de productos con tema y fecha de entrada en almacén.</p>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* Cantidad Pedida por Mes y Talla */}
+      {data.cantidadPedidaPorMesTalla && data.cantidadPedidaPorMesTalla.length > 0 && (
+        <VisualizationCard 
+          title="Cantidad Pedida por Mes y Talla"
+          id="cantidad-pedida-mes-talla"
+          className="xl:col-span-2"
+        >
+          <div className="overflow-x-auto">
+            <div className="min-w-full">
+              {(() => {
+                // Crear tabla pivot: mes como filas, talla como columnas
+                const meses = Array.from(new Set(data.cantidadPedidaPorMesTalla.map(d => d.mes))).sort();
+                const tallas = Array.from(new Set(data.cantidadPedidaPorMesTalla.map(d => d.talla))).sort();
+                
+                const pivotData = new Map<string, Map<string, number>>();
+                data.cantidadPedidaPorMesTalla.forEach(d => {
+                  if (!pivotData.has(d.mes)) {
+                    pivotData.set(d.mes, new Map());
+                  }
+                  pivotData.get(d.mes)!.set(d.talla, d.cantidad);
+                });
+                
+                const totalPedida = data.cantidadPedidaPorMesTalla.reduce((sum, d) => sum + d.cantidad, 0);
+                
+                return (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="sticky left-0 bg-card z-10">Mes</TableHead>
+                          {tallas.map(talla => (
+                            <TableHead key={talla} className="text-right">
+                              {talla}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {meses.map(mes => {
+                          const rowData = pivotData.get(mes)!;
+                          return (
+                            <TableRow key={mes}>
+                              <TableCell className="font-medium sticky left-0 bg-card z-10">{mes}</TableCell>
+                              {tallas.map(talla => (
+                                <TableCell key={talla} className="text-right font-mono">
+                                  {formatNumber(rowData.get(talla) || 0)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    <div className="mt-4 text-sm text-muted-foreground">
+                      <strong>Total Cantidad Pedida:</strong> {formatNumber(totalPedida)}
+                    </div>
+                    {meses.length <= 2 && (
+                      <div className="mt-2 text-xs text-muted-foreground italic">
+                        ℹ️ Mostrando {meses.length} mes(es) (incluyendo meses con 0)
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* Ventas vs Traspasos por Tienda */}
+      {data.ventasVsTraspasosPorTienda && data.ventasVsTraspasosPorTienda.length > 0 && (
+        <VisualizationCard 
+          title="Ventas vs Traspasos por Tienda"
+          id="ventas-vs-traspasos-tienda"
+          className="xl:col-span-3"
+        >
+          <ResponsiveContainer width="100%" height={500}>
+            {(() => {
+              // Agrupar por tienda para crear barras agrupadas
+              const tiendas = Array.from(new Set(data.ventasVsTraspasosPorTienda.map(d => d.tienda))).slice(0, 30);
+              const temporadas = Array.from(new Set(data.ventasVsTraspasosPorTienda.map(d => d.temporada))).sort();
+              
+              const chartData = tiendas.map(tienda => {
+                const rowData: Record<string, number> = { tienda };
+                temporadas.forEach(temp => {
+                  const item = data.ventasVsTraspasosPorTienda.find(d => d.tienda === tienda && d.temporada === temp);
+                  rowData[`ventas_${temp}`] = item?.ventas || 0;
+                  rowData[`traspasos_${temp}`] = item?.traspasos || 0;
+                });
+                return rowData;
+              });
+              
+              return (
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="tienda" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                    interval={0}
+                  />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value: number) => formatNumber(value)}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Legend />
+                  {temporadas.map((temp, idx) => {
+                    const color = getValueColor(idx, 0, temporadas.length - 1);
+                    return (
+                      <Bar key={`ventas_${temp}`} dataKey={`ventas_${temp}`} name={`Ventas ${temp}`} stackId="ventas" fill={color} />
+                    );
+                  })}
+                  {temporadas.map((temp, idx) => {
+                    const yellowColors = ['#ffff00', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722'];
+                    const color = yellowColors[idx % yellowColors.length];
+                    return (
+                      <Bar key={`traspasos_${temp}`} dataKey={`traspasos_${temp}`} name={`Traspasos ${temp}`} stackId="traspasos" fill={color} />
+                    );
+                  })}
+            </BarChart>
+              );
+            })()}
+          </ResponsiveContainer>
+        </VisualizationCard>
+      )}
+
+      {/* Resumen de Ventas vs Traspasos por Temporada */}
+      {data.resumenVentasVsTraspasosTemporada && data.resumenVentasVsTraspasosTemporada.length > 0 && (
+        <VisualizationCard 
+          title="Resumen de Ventas vs Traspasos por Temporada"
+          id="resumen-ventas-traspasos-temporada"
+          className="xl:col-span-2"
+        >
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Temporada</TableHead>
+                  <TableHead className="text-right">Ventas</TableHead>
+                  <TableHead className="text-right">Traspasos</TableHead>
+                  <TableHead className="text-right">Diferencia</TableHead>
+                  <TableHead className="text-right">Eficiencia</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.resumenVentasVsTraspasosTemporada.map((item) => (
+                  <TableRow key={item.temporada}>
+                    <TableCell className="font-medium">{item.temporada}</TableCell>
+                    <TableCell className="text-right font-mono">{formatNumber(item.ventas)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatNumber(item.traspasos)}</TableCell>
+                    <TableCell className={`text-right font-mono ${item.diferencia >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                      {formatNumber(item.diferencia)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{formatPercentage(item.eficiencia)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </VisualizationCard>
+      )}
+
+      {/* Totales por Tienda */}
+      {data.totalesPorTienda && data.totalesPorTienda.length > 0 && (
+        <VisualizationCard 
+          title="Totales por Tienda: Detalle por Temporada"
+          id="totales-por-tienda"
+          className="xl:col-span-3"
+        >
+          <div className="space-y-6">
+            {/* Tabla de totales */}
+            <div>
+              <h4 className="font-semibold mb-3">Totales por Tienda:</h4>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tienda</TableHead>
+                      <TableHead className="text-right">Ventas</TableHead>
+                      <TableHead className="text-right">Traspasos</TableHead>
+                      <TableHead className="text-right">Diferencia</TableHead>
+                      <TableHead className="text-right">Devoluciones</TableHead>
+                      <TableHead className="text-right">Eficiencia</TableHead>
+                      <TableHead className="text-right">Ratio Devolución</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.totalesPorTienda.map((item) => (
+                      <TableRow key={item.tienda}>
+                        <TableCell className="font-medium">{item.tienda}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(item.ventas)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatNumber(item.traspasos)}</TableCell>
+                        <TableCell className={`text-right font-mono ${item.diferencia >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+                          {formatNumber(item.diferencia)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-destructive">{formatNumber(item.devoluciones)}</TableCell>
+                        <TableCell className="text-right font-mono">{formatPercentage(item.eficiencia)}</TableCell>
+                        <TableCell className="text-right font-mono text-destructive">{formatPercentage(item.ratioDevolucion)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Detalle por Temporada */}
+            <div>
+              <h4 className="font-semibold mb-3">Detalle por Temporada:</h4>
+              <div className="space-y-4">
+                {data.totalesPorTienda.slice(0, 10).map((item) => {
+                  if (!item.detallePorTemporada || item.detallePorTemporada.length === 0) return null;
+                  
                   return (
-                    <Cell key={`cell-${index}`} fill={getValueColor(entry.cantidad, min, max)} />
+                    <div key={item.tienda} className="border rounded-lg p-4">
+                      <h5 className="font-medium mb-2">{item.tienda}</h5>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Temporada</TableHead>
+                              <TableHead className="text-right">Ventas</TableHead>
+                              <TableHead className="text-right">Traspasos</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {item.detallePorTemporada.map((detalle) => (
+                              <TableRow key={detalle.temporada}>
+                                <TableCell>{detalle.temporada}</TableCell>
+                                <TableCell className="text-right font-mono">{formatNumber(detalle.ventas)}</TableCell>
+                                <TableCell className="text-right font-mono">{formatNumber(detalle.traspasos)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
                   );
                 })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
         </VisualizationCard>
       )}
     </div>
