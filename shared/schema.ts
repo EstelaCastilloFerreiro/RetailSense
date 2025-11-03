@@ -121,12 +121,46 @@ export const dashboardDataSchema = z.object({
 
 export type DashboardData = z.infer<typeof dashboardDataSchema>;
 
+// Schema for Purchase Plan (Plan de Compras) - Must be defined before forecastJobSchema
+export const purchasePlanRowSchema = z.object({
+  seccion: z.string(), // Categoría/Familia (ej: Faldas, Pantalón, etc.)
+  pvpPorcentaje: z.number(), // % sección PVP
+  contribucionPorcentaje: z.number(), // % sección CONTRI.
+  uds: z.number(), // Unidades
+  pvp: z.number(), // PVP total
+  coste: z.number(), // COSTE total
+  profit: z.number(), // Prof (Profit)
+  opciones: z.number(), // Opc (Options)
+  pmCte: z.number(), // PM Cte (Average Cost Price)
+  pmVta: z.number(), // PM Vta (Average Selling Price)
+  mk: z.number(), // Mk (Markup)
+  markdownPorcentaje: z.number(), // MARK DOW %
+  sobranPorcentaje: z.number(), // SOBR ANTE %
+  porTienda: z.number(), // x tienda
+  porTalla: z.number(), // x talla
+});
+
+export type PurchasePlanRow = z.infer<typeof purchasePlanRowSchema>;
+
+export const purchasePlanSchema = z.object({
+  rows: z.array(purchasePlanRowSchema),
+  totalPrendas: purchasePlanRowSchema,
+  totalComplementos: purchasePlanRowSchema.optional(),
+  totalTrucco: purchasePlanRowSchema.optional(),
+  modeloUtilizado: z.string(), // Modelo seleccionado automáticamente
+  precisionModelo: z.number(), // Precisión del modelo
+  variablesUtilizadas: z.array(z.string()), // Variables que dieron mejores resultados
+  temporadaObjetivo: z.string().optional(), // Temporada que se está prediciendo (ej: "Primavera/Verano 2025")
+});
+
+export type PurchasePlan = z.infer<typeof purchasePlanSchema>;
+
 // Schema for forecast jobs
 export const forecastJobSchema = z.object({
   id: z.string(),
   fileId: z.string(),
   clientId: z.string(),
-  model: z.enum(["catboost", "xgboost", "prophet"]),
+  model: z.enum(["catboost", "xgboost", "prophet", "auto"]).optional(), // "auto" means automatically selected
   status: z.enum(["pending", "running", "completed", "failed"]),
   createdAt: z.string(),
   completedAt: z.string().optional(),
@@ -143,13 +177,14 @@ export const forecastJobSchema = z.object({
       precioOptimo: z.number().optional(),
       margenEstimado: z.number().optional(),
       confianza: z.number(),
-    })),
+    })).optional(),
     summary: z.object({
       totalPredictions: z.number(),
       avgDemand: z.number(),
       avgPrice: z.number().optional(),
       modelAccuracy: z.number().optional(),
-    }),
+    }).optional(),
+    purchasePlan: purchasePlanSchema.optional(),
   }).optional(),
 });
 
@@ -157,13 +192,13 @@ export type ForecastJob = z.infer<typeof forecastJobSchema>;
 
 export const forecastRequestSchema = z.object({
   fileId: z.string(),
-  model: z.enum(["catboost", "xgboost", "prophet"]),
   filters: z.object({
     temporadas: z.array(z.string()).optional(),
     familias: z.array(z.string()).optional(),
     tiendas: z.array(z.string()).optional(),
   }).optional(),
   horizon: z.number().default(3), // Months to forecast
+  temporadaTipo: z.enum(["PV", "OI"]).optional(), // Tipo de temporada a predecir (si no se especifica, se calcula automáticamente)
 });
 
 export type ForecastRequest = z.infer<typeof forecastRequestSchema>;

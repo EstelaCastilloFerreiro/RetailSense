@@ -1,71 +1,62 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp,
   Calendar,
   Package,
   DollarSign,
   Brain,
-  BarChart3,
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Store,
-  Layers,
-  Filter,
+  RefreshCw,
+  FileText,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import Chatbot from "@/components/Chatbot";
 import { useData } from "@/contexts/DataContext";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"];
+import type { PurchasePlanRow } from "@shared/schema";
 
 export default function Forecasting() {
-  const [selectedModel, setSelectedModel] = useState("catboost");
-  const [horizon, setHorizon] = useState("3");
-  const [selectedTemporadas, setSelectedTemporadas] = useState<string[]>([]);
-  const [selectedFamilias, setSelectedFamilias] = useState<string[]>([]);
-  const [selectedTiendas, setSelectedTiendas] = useState<string[]>([]);
   const { fileId } = useData();
   const { toast } = useToast();
-
-  const { data: filters } = useQuery<{
-    temporadas: string[];
-    familias: string[];
-    tiendas: string[];
-  }>({
-    queryKey: ["/api/filters", fileId],
-    enabled: !!fileId,
-  });
+  const [autoRun, setAutoRun] = useState(false);
+  const [selectedTemporada, setSelectedTemporada] = useState<'PV' | 'OI' | null>(null);
 
   const { data: forecastJobs, isLoading: jobsLoading } = useQuery<any[]>({
     queryKey: ["/api/forecast/jobs", fileId],
     enabled: !!fileId,
+    refetchInterval: (data) => {
+      // Poll every 2 seconds if there's a running job
+      const jobs = Array.isArray(data) ? data : [];
+      const hasRunning = jobs.some((job: any) => job?.status === "running");
+      return hasRunning ? 2000 : false;
+    },
   });
 
   const latestJob = Array.isArray(forecastJobs) && forecastJobs.length > 0 ? forecastJobs[0] : null;
+  const purchasePlan = latestJob?.results?.purchasePlan;
+  
+  // Determinar temporada seleccionada desde purchasePlan si existe
+  useEffect(() => {
+    if (purchasePlan?.temporadaObjetivo && !selectedTemporada) {
+      const tipo = purchasePlan.temporadaObjetivo.includes('Primavera') ? 'PV' : 'OI';
+      setSelectedTemporada(tipo);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchasePlan?.temporadaObjetivo]);
 
   const runForecastMutation = useMutation({
     mutationFn: async () => {
@@ -73,13 +64,8 @@ export default function Forecasting() {
         method: "POST",
         body: JSON.stringify({
           fileId,
-          model: selectedModel,
-          horizon: parseInt(horizon),
-          filters: {
-            temporadas: selectedTemporadas.length > 0 ? selectedTemporadas : undefined,
-            familias: selectedFamilias.length > 0 ? selectedFamilias : undefined,
-            tiendas: selectedTiendas.length > 0 ? selectedTiendas : undefined,
-          },
+          horizon: 6, // Siempre usar 6 meses para temporada completa
+          temporadaTipo: selectedTemporada || undefined, // Enviar temporada seleccionada si existe
         }),
         headers: { "Content-Type": "application/json" },
       });
@@ -90,7 +76,7 @@ export default function Forecasting() {
       queryClient.invalidateQueries({ queryKey: ["/api/forecast/jobs", fileId] });
       toast({
         title: "Predicción iniciada",
-        description: "El modelo está procesando los datos. Los resultados aparecerán en breve.",
+        description: "El sistema está analizando los datos y generando el plan de compras automáticamente.",
       });
     },
     onError: (error: any) => {
@@ -102,88 +88,91 @@ export default function Forecasting() {
     },
   });
 
+  // Auto-run forecast when fileId is available and no job exists
+  useEffect(() => {
+    if (fileId && !autoRun && (!latestJob || latestJob.status === "failed")) {
+      // No auto-run - esperar a que el usuario seleccione temporada
+      // El auto-run se deshabilita para que el usuario siempre elija la temporada
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId, latestJob?.status]);
+
   const handleRunForecast = () => {
     runForecastMutation.mutate();
   };
 
-  const predictions = latestJob?.results?.predictions || [];
-  const summary = latestJob?.results?.summary;
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("es-ES", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
-  const demandByProduct = predictions
-    .reduce((acc: any[], pred: any) => {
-      const existing = acc.find((p: any) => p.producto === pred.producto);
-      if (existing) {
-        existing.demanda += pred.demandaPredicha;
-      } else {
-        acc.push({
-          producto: pred.producto,
-          demanda: pred.demandaPredicha,
-          precioOptimo: pred.precioOptimo || 0,
-        });
-      }
-      return acc;
-    }, [])
-    .sort((a: any, b: any) => b.demanda - a.demanda)
-    .slice(0, 10);
-
-  const demandByStore = predictions
-    .reduce((acc: any[], pred: any) => {
-      if (!pred.tienda) return acc;
-      const existing = acc.find((p: any) => p.tienda === pred.tienda);
-      if (existing) {
-        existing.demanda += pred.demandaPredicha;
-      } else {
-        acc.push({
-          tienda: pred.tienda,
-          demanda: pred.demandaPredicha,
-        });
-      }
-      return acc;
-    }, [])
-    .sort((a: any, b: any) => b.demanda - a.demanda);
-
-  const demandByFamily = predictions
-    .reduce((acc: any[], pred: any) => {
-      if (!pred.familia) return acc;
-      const existing = acc.find((p: any) => p.familia === pred.familia);
-      if (existing) {
-        existing.demanda += pred.demandaPredicha;
-      } else {
-        acc.push({
-          familia: pred.familia,
-          demanda: pred.demandaPredicha,
-        });
-      }
-      return acc;
-    }, [])
-    .sort((a: any, b: any) => b.demanda - a.demanda);
-
-  const demandBySeason = predictions
-    .reduce((acc: any[], pred: any) => {
-      if (!pred.temporada) return acc;
-      const existing = acc.find((p: any) => p.temporada === pred.temporada);
-      if (existing) {
-        existing.demanda += pred.demandaPredicha;
-      } else {
-        acc.push({
-          temporada: pred.temporada,
-          demanda: pred.demandaPredicha,
-        });
-      }
-      return acc;
-    }, [])
-    .sort((a: any, b: any) => b.demanda - a.demanda);
+  const formatNumber = (value: number, decimals: number = 0) => {
+    return new Intl.NumberFormat("es-ES", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(value);
+  };
 
   return (
     <div className="flex h-full bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Forecasting</h1>
-            <p className="text-muted-foreground">
-              Predicción de demanda y optimización de precios con Machine Learning
-            </p>
-          </div>
+        <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-full">
+              <div>
+                <h1 className="text-3xl font-bold">Forecasting</h1>
+                <p className="text-muted-foreground">
+                  Predicción automática de demanda y recomendaciones de compra basadas en Machine Learning
+                </p>
+              </div>
+
+          {fileId && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex-1 min-w-[250px]">
+                    <label className="text-sm font-medium mb-2 block">Seleccionar Temporada a Predecir</label>
+                    <Select 
+                      value={selectedTemporada || ""} 
+                      onValueChange={(value) => setSelectedTemporada(value as 'PV' | 'OI' | null)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecciona temporada..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PV">Primavera/Verano (P/V)</SelectItem>
+                        <SelectItem value="OI">Otoño/Invierno (O/I)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Predice la temporada siguiente a los datos más recientes disponibles (ej: si datos más recientes son 2025, PV sería 2026)
+                    </p>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={handleRunForecast}
+                      disabled={runForecastMutation.isPending || latestJob?.status === "running" || !selectedTemporada}
+                      data-testid="button-run-forecast"
+                    >
+                      {runForecastMutation.isPending || latestJob?.status === "running" ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Procesando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Generar Predicción
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {!fileId ? (
             <Card>
@@ -204,391 +193,316 @@ export default function Forecasting() {
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Status Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Demanda Total Predicha</CardTitle>
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Estado del Modelo</CardTitle>
+                    <Brain className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold" data-testid="text-total-demand">
-                      {summary?.avgDemand
-                        ? `${(summary.avgDemand * (summary.totalPredictions || 0)).toFixed(0)} unidades`
-                        : "Ejecuta predicción"}
+                    <div className="flex items-center gap-2">
+                      {latestJob?.status === "completed" && (
+                        <>
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          <span className="text-sm font-medium">Completado</span>
+                        </>
+                      )}
+                      {latestJob?.status === "running" && (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          <span className="text-sm font-medium">Procesando...</span>
+                        </>
+                      )}
+                      {latestJob?.status === "failed" && (
+                        <>
+                          <AlertCircle className="h-5 w-5 text-destructive" />
+                          <span className="text-sm font-medium">Error</span>
+                        </>
+                      )}
+                      {!latestJob && (
+                        <>
+                          <Calendar className="h-5 w-5 text-muted-foreground" />
+                          <span className="text-sm font-medium">Pendiente</span>
+                        </>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">Próximos {horizon} meses</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Precio Promedio Óptimo</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold" data-testid="text-avg-price">
-                      {summary?.avgPrice ? `$${summary.avgPrice.toFixed(2)}` : "N/A"}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Maximizar ventas y márgenes</p>
+                    {purchasePlan && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Modelo: {purchasePlan.modeloUtilizado.toUpperCase()}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Precisión del Modelo</CardTitle>
-                    <Brain className="h-4 w-4 text-muted-foreground" />
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold" data-testid="text-model-accuracy">
-                      {summary?.modelAccuracy ? `${(summary.modelAccuracy * 100).toFixed(1)}%` : "N/A"}
+                    <div className="text-2xl font-bold">
+                      {purchasePlan?.precisionModelo
+                        ? `${(purchasePlan.precisionModelo * 100).toFixed(1)}%`
+                        : "N/A"}
                     </div>
-                    <p className="text-xs text-muted-foreground">Confianza en predicciones</p>
+                    <p className="text-xs text-muted-foreground">
+                      {purchasePlan?.precisionModelo
+                        ? purchasePlan.precisionModelo >= 0.85
+                          ? "Excelente - Alta confianza"
+                          : purchasePlan.precisionModelo >= 0.75
+                          ? "Buena - Confianza moderada"
+                          : purchasePlan.precisionModelo >= 0.65
+                          ? "Aceptable - Usar con precaución"
+                          : "Baja - Revisar datos"
+                        : "Calculando..."}
+                    </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Productos Analizados</CardTitle>
+                    <CardTitle className="text-sm font-medium">Unidades Totales</CardTitle>
                     <Package className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold" data-testid="text-total-predictions">
-                      {summary?.totalPredictions || 0}
+                    <div className="text-2xl font-bold">
+                      {purchasePlan?.totalPrendas?.uds
+                        ? formatNumber(purchasePlan.totalPrendas.uds)
+                        : "0"}
                     </div>
-                    <p className="text-xs text-muted-foreground">Con predicciones generadas</p>
+                    <p className="text-xs text-muted-foreground">Unidades recomendadas</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Inversión Total</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {purchasePlan?.totalPrendas?.coste
+                        ? formatCurrency(purchasePlan.totalPrendas.coste)
+                        : "€0"}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Coste estimado</p>
                   </CardContent>
                 </Card>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Brain className="h-5 w-5" />
-                    Configuración del Modelo de Predicción
-                  </CardTitle>
-                  <CardDescription>
-                    Configura el modelo de machine learning y los filtros para las predicciones
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="model-select">Modelo de Machine Learning</Label>
-                      <Select value={selectedModel} onValueChange={setSelectedModel}>
-                        <SelectTrigger id="model-select" data-testid="select-model">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="catboost">
-                            CatBoost - Mejor para datos categóricos
-                          </SelectItem>
-                          <SelectItem value="xgboost">
-                            XGBoost - Rendimiento balanceado
-                          </SelectItem>
-                          <SelectItem value="prophet">
-                            Prophet - Series temporales
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="horizon-select">Horizonte de Predicción</Label>
-                      <Select value={horizon} onValueChange={setHorizon}>
-                        <SelectTrigger id="horizon-select" data-testid="select-horizon">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 mes</SelectItem>
-                          <SelectItem value="3">3 meses</SelectItem>
-                          <SelectItem value="6">6 meses</SelectItem>
-                          <SelectItem value="12">12 meses</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-4 w-4 text-muted-foreground" />
-                      <Label>Filtros Opcionales (dejar vacío para predecir todo)</Label>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {filters?.temporadas && filters.temporadas.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">Temporadas</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {filters.temporadas.slice(0, 5).map((temp) => (
-                              <Badge
-                                key={temp}
-                                variant={selectedTemporadas.includes(temp) ? "default" : "outline"}
-                                className="cursor-pointer hover-elevate"
-                                onClick={() => {
-                                  setSelectedTemporadas((prev) =>
-                                    prev.includes(temp)
-                                      ? prev.filter((t) => t !== temp)
-                                      : [...prev, temp]
-                                  );
-                                }}
-                                data-testid={`badge-temporada-${temp}`}
-                              >
-                                {temp}
-                              </Badge>
-                            ))}
+              {/* Status Card - Show when there's a job */}
+              {latestJob && (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      {purchasePlan?.temporadaObjetivo ? (
+                        <div className="flex items-center gap-3">
+                          <Calendar className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">Temporada Objetivo</p>
+                            <p className="text-xs text-muted-foreground">
+                              {purchasePlan.temporadaObjetivo} - Modelo usa solo datos históricos de temporadas similares ({purchasePlan.temporadaObjetivo.includes('Primavera') ? 'P/V' : 'O/I'})
+                            </p>
                           </div>
                         </div>
-                      )}
-                      {filters?.familias && filters.familias.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">Familias</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {filters.familias.slice(0, 5).map((fam) => (
-                              <Badge
-                                key={fam}
-                                variant={selectedFamilias.includes(fam) ? "default" : "outline"}
-                                className="cursor-pointer hover-elevate"
-                                onClick={() => {
-                                  setSelectedFamilias((prev) =>
-                                    prev.includes(fam) ? prev.filter((f) => f !== fam) : [...prev, fam]
-                                  );
-                                }}
-                                data-testid={`badge-familia-${fam}`}
-                              >
-                                {fam}
-                              </Badge>
-                            ))}
+                      ) : latestJob?.status === "running" ? (
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          <div>
+                            <p className="text-sm font-medium">Procesando predicción...</p>
+                            <p className="text-xs text-muted-foreground">El sistema está analizando los datos</p>
                           </div>
                         </div>
-                      )}
-                      {filters?.tiendas && filters.tiendas.length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">Tiendas</Label>
-                          <div className="flex flex-wrap gap-2">
-                            {filters.tiendas.slice(0, 5).map((tienda) => (
-                              <Badge
-                                key={tienda}
-                                variant={selectedTiendas.includes(tienda) ? "default" : "outline"}
-                                className="cursor-pointer hover-elevate"
-                                onClick={() => {
-                                  setSelectedTiendas((prev) =>
-                                    prev.includes(tienda)
-                                      ? prev.filter((t) => t !== tienda)
-                                      : [...prev, tienda]
-                                  );
-                                }}
-                                data-testid={`badge-tienda-${tienda}`}
-                              >
-                                {tienda}
-                              </Badge>
-                            ))}
+                      ) : latestJob?.status === "failed" ? (
+                        <div className="flex items-center gap-3">
+                          <AlertCircle className="h-5 w-5 text-destructive" />
+                          <div>
+                            <p className="text-sm font-medium">Error en la predicción</p>
+                            <p className="text-xs text-muted-foreground">Hubo un problema al generar el plan</p>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      {latestJob && (
-                        <div className="flex items-center gap-2">
-                          {latestJob.status === "completed" && (
+                      ) : null}
+                      {purchasePlan && (
+                        <Button
+                          onClick={handleRunForecast}
+                          disabled={runForecastMutation.isPending || latestJob?.status === "running" || !selectedTemporada}
+                          data-testid="button-recalculate-forecast"
+                          variant="outline"
+                        >
+                          {runForecastMutation.isPending || latestJob?.status === "running" ? (
                             <>
-                              <CheckCircle2 className="h-4 w-4 text-green-500" />
-                              <span>Última predicción completada</span>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Procesando...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Recalcular
                             </>
                           )}
-                          {latestJob.status === "running" && (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Procesando predicción...</span>
-                            </>
-                          )}
-                          {latestJob.status === "failed" && (
-                            <>
-                              <AlertCircle className="h-4 w-4 text-destructive" />
-                              <span>Error en última predicción</span>
-                            </>
-                          )}
-                        </div>
+                        </Button>
                       )}
                     </div>
-                    <Button
-                      onClick={handleRunForecast}
-                      disabled={runForecastMutation.isPending || latestJob?.status === "running"}
-                      data-testid="button-run-forecast"
-                    >
-                      {runForecastMutation.isPending || latestJob?.status === "running" ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <TrendingUp className="h-4 w-4 mr-2" />
-                          Ejecutar Predicción
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Variables Utilizadas por el Modelo</CardTitle>
-                  <CardDescription>
-                    El modelo analiza estos factores históricos para predecir la demanda futura
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <h4 className="font-medium text-sm flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4" />
-                        Datos Históricos de Ventas
-                      </h4>
-                      <ul className="text-sm text-muted-foreground space-y-2 ml-6">
-                        <li>• Ventas por producto, tienda y periodo</li>
-                        <li>• Precios y descuentos aplicados</li>
-                        <li>• Rotación de inventario</li>
-                        <li>• Transferencias entre tiendas</li>
-                      </ul>
-                    </div>
-                    <div className="space-y-3">
-                      <h4 className="font-medium text-sm flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        Variables de Contexto
-                      </h4>
-                      <ul className="text-sm text-muted-foreground space-y-2 ml-6">
-                        <li>• Temporada y estacionalidad</li>
-                        <li>• Familia y categoría de producto</li>
-                        <li>• Ubicación de tienda (zona/región)</li>
-                        <li>• Tendencias históricas de crecimiento</li>
-                      </ul>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {predictions.length > 0 ? (
+              {/* Purchase Plan Table */}
+              {purchasePlan ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Resultados de Predicción</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Plan de Compras - Recomendaciones
+                    </CardTitle>
                     <CardDescription>
-                      Análisis de demanda futura y precios óptimos basados en {selectedModel.toUpperCase()}
+                      Predicciones de demanda y recomendaciones de compra por sección
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Tabs defaultValue="products" className="w-full">
-                      <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="products" data-testid="tab-products">
-                          Por Producto
-                        </TabsTrigger>
-                        <TabsTrigger value="stores" data-testid="tab-stores">
-                          Por Tienda
-                        </TabsTrigger>
-                        <TabsTrigger value="families" data-testid="tab-families">
-                          Por Familia
-                        </TabsTrigger>
-                        <TabsTrigger value="seasons" data-testid="tab-seasons">
-                          Por Temporada
-                        </TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="products" className="space-y-4">
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-medium">Top 10 Productos con Mayor Demanda Predicha</h3>
-                          <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={demandByProduct}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis
-                                dataKey="producto"
-                                angle={-45}
-                                textAnchor="end"
-                                height={100}
-                                tick={{ fontSize: 10 }}
-                              />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Bar dataKey="demanda" fill="#8884d8" name="Demanda Predicha" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="stores" className="space-y-4">
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-medium">Demanda Predicha por Tienda</h3>
-                          <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={demandByStore}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="tienda" angle={-45} textAnchor="end" height={100} />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Bar dataKey="demanda" fill="#00C49F" name="Demanda Predicha" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="families" className="space-y-4">
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-medium">Distribución de Demanda por Familia</h3>
-                          <ResponsiveContainer width="100%" height={400}>
-                            <PieChart>
-                              <Pie
-                                data={demandByFamily}
-                                dataKey="demanda"
-                                nameKey="familia"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={120}
-                                fill="#8884d8"
-                                label
-                              >
-                                {demandByFamily.map((entry: any, index: number) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="seasons" className="space-y-4">
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-medium">Demanda Predicha por Temporada</h3>
-                          <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={demandBySeason}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="temporada" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Bar dataKey="demanda" fill="#FFBB28" name="Demanda Predicha" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </TabsContent>
-                    </Tabs>
+                    <div className="rounded-md border overflow-x-auto w-full">
+                      <Table className="w-full min-w-[1200px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="font-bold">SECCIÓN</TableHead>
+                            <TableHead className="text-center">% PVP</TableHead>
+                            <TableHead className="text-center">% CONTRI.</TableHead>
+                            <TableHead className="text-right">UDS</TableHead>
+                            <TableHead className="text-right">PVP</TableHead>
+                            <TableHead className="text-right">COSTE</TableHead>
+                            <TableHead className="text-right">PROF</TableHead>
+                            <TableHead className="text-right">OPC</TableHead>
+                            <TableHead className="text-right">PM CTE</TableHead>
+                            <TableHead className="text-right">PM VTA</TableHead>
+                            <TableHead className="text-right">MK %</TableHead>
+                            <TableHead className="text-right">MARK DOW %</TableHead>
+                            <TableHead className="text-right">SOBR ANTE %</TableHead>
+                            <TableHead className="text-right">x TIENDA</TableHead>
+                            <TableHead className="text-right">x TALLA</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {purchasePlan.rows.map((row: PurchasePlanRow, idx: number) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{row.seccion}</TableCell>
+                              <TableCell className="text-center">
+                                {formatNumber(row.pvpPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {formatNumber(row.contribucionPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {formatNumber(row.uds)}
+                              </TableCell>
+                              <TableCell className="text-right">{formatCurrency(row.pvp)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(row.coste)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(row.profit)}</TableCell>
+                              <TableCell className="text-right">{row.opciones}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(row.pmCte)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(row.pmVta)}</TableCell>
+                              <TableCell className="text-right">
+                                {formatNumber(row.mk, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatNumber(row.markdownPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatNumber(row.sobranPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right">{row.porTienda}</TableCell>
+                              <TableCell className="text-right">{row.porTalla}</TableCell>
+                            </TableRow>
+                          ))}
+                          {/* Total Row */}
+                          {purchasePlan.totalPrendas && (
+                            <TableRow className="bg-muted font-bold">
+                              <TableCell>{purchasePlan.totalPrendas.seccion}</TableCell>
+                              <TableCell className="text-center">
+                                {formatNumber(purchasePlan.totalPrendas.pvpPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {formatNumber(purchasePlan.totalPrendas.contribucionPorcentaje, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatNumber(purchasePlan.totalPrendas.uds)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(purchasePlan.totalPrendas.pvp)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(purchasePlan.totalPrendas.coste)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(purchasePlan.totalPrendas.profit)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {purchasePlan.totalPrendas.opciones}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(purchasePlan.totalPrendas.pmCte)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatCurrency(purchasePlan.totalPrendas.pmVta)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {formatNumber(purchasePlan.totalPrendas.mk, 1)}%
+                              </TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                              <TableCell className="text-right">-</TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    
+                    {/* Summary Text */}
+                    {purchasePlan.totalPrendas && (
+                      <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Resumen:</strong> El sistema recomienda comprar{" "}
+                          <strong>{formatNumber(purchasePlan.totalPrendas.uds)} unidades</strong> con una
+                          inversión estimada de{" "}
+                          <strong>{formatCurrency(purchasePlan.totalPrendas.coste)}</strong>. La predicción
+                          se basa en análisis histórico de ventas y considera factores estacionales, tendencias
+                          y rotación de inventario. Se recomienda revisar estas cifras periódicamente según
+                          avance la temporada.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : latestJob?.status === "running" ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Generando Plan de Compras</CardTitle>
+                    <CardDescription>
+                      El sistema está analizando los datos y generando predicciones...
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-12">
+                      <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+                      <p className="text-muted-foreground">
+                        Procesando datos y optimizando el modelo...
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               ) : (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Resultados de Predicción</CardTitle>
+                    <CardTitle>Plan de Compras</CardTitle>
                     <CardDescription>
-                      Los resultados aparecerán aquí una vez que ejecutes el modelo
+                      Los resultados aparecerán aquí una vez que se complete el análisis
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-12 text-muted-foreground">
                       <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Ejecuta una predicción para ver los resultados</p>
+                      <p>Ejecuta una predicción para ver el plan de compras</p>
                     </div>
                   </CardContent>
                 </Card>

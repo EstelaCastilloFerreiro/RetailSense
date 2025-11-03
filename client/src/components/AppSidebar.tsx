@@ -53,37 +53,25 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 border-b">
-        <div className="flex items-center gap-3">
-          <img 
-            src="/klob-logo.svg" 
-            alt="KLOB Logo" 
-            className="h-8 w-auto"
-          />
-          <div>
-            <h2 className="font-semibold text-sm">KLOB Analytics</h2>
-            <p className="text-xs text-muted-foreground">Retail Intelligence</p>
-          </div>
-        </div>
+      <SidebarHeader className="p-6 border-b h-[6rem]">
+        {/* Logo removido - ahora está en el header principal */}
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Módulos Principales</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-base font-medium">Módulos Principales</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-4">
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     onClick={() => setLocation(item.url)}
                     isActive={location === item.url}
                     data-testid={`nav-${item.url.slice(1)}`}
+                    className="px-4 py-4 gap-4"
                   >
-                    <item.icon className="h-4 w-4" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{item.title}</span>
-                      <span className="text-xs text-muted-foreground">{item.description}</span>
-                    </div>
+                    <item.icon className="h-6 w-6" />
+                    <span className="text-base font-medium">{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
