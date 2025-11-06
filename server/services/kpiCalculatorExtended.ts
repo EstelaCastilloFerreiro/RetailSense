@@ -520,6 +520,20 @@ export function calculateExtendedDashboardData(
     tasaDevolucion: ventasPositivasFicticio > 0 ? (devolucionesFicticio / ventasPositivasFicticio) * 100 : 0,
   };
   
+  console.log('📊 KPIs GR.ART.FICTICIO Debug:');
+  console.log(`   Total ventas ficticio: ${ventasFicticio.length} registros`);
+  console.log(`   Ventas positivas ficticio: ${ventasFicticio.filter(v => (v.cantidad || 0) > 0).length} registros`);
+  console.log(`   Ventas negativas ficticio: ${ventasFicticio.filter(v => (v.cantidad || 0) < 0).length} registros`);
+  console.log(`   Ventas Brutas: ${ventasPositivasFicticio.toFixed(2)}€ (esperado: 2,968,127€)`);
+  console.log(`   Devoluciones: ${devolucionesFicticio.toFixed(2)}€`);
+  console.log(`   Total Neto: ${kpisFicticio.totalNeto.toFixed(2)}€`);
+  console.log(`   Sample ventas ficticio (primeras 3):`, ventasFicticio.slice(0, 3).map(v => ({
+    tienda: v.tienda,
+    cantidad: v.cantidad,
+    subtotal: v.subtotal,
+    familia: v.descripcionFamilia
+  })));
+  
   // Calcular KPIs por tipo de tienda - Match Streamlit logic
   const ventasAnalisis = ventasReales.filter(v => (v.cantidad || 0) > 0);
   const ventasOnline = ventasAnalisis.filter(v => v.tienda && v.tienda.toUpperCase().includes('ONLINE'));
