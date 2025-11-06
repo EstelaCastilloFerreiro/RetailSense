@@ -27,6 +27,11 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
 - ✅ Forecasting backend complete with mock ML predictions and API endpoints
 - ✅ Section-aware chatbot integration across all sections
 - ✅ Sentiment Analysis placeholder page ready for future development
+- ✅ **New Analytics Charts** (Nov 6, 2025):
+  - Top 30 Stores (most/least sales) - horizontal bar charts in Geographic section
+  - Units by Size - stacked bars showing quantity by talla and temporada in Products section
+  - Sales vs Transfers - comparison chart by store in Geographic section
+  - Warehouse Entries by Season - bar chart in Products section
 
 ## User Preferences
 
@@ -64,6 +69,11 @@ Preferred communication style: Simple, everyday language.
 - `KPICard`: Reusable metric display with trend indicators
 - `Chatbot`: Section-aware AI assistant for visualizations and queries
 - Chart components: Demand forecasting, price optimization, regional sales, inventory tables, top products
+- **New Analytics Charts**:
+  - `TopStoresChart`: Top/bottom 30 stores by sales with horizontal bars
+  - `UnitsBySizeChart`: Units sold by size (talla) stacked by season
+  - `SalesVsTransfersChart`: Store-level sales vs transfers comparison
+  - `WarehouseEntriesChart`: Warehouse entries aggregated by season
 
 ### Backend Architecture
 
@@ -73,6 +83,10 @@ Preferred communication style: Simple, everyday language.
 - `POST /api/upload` - File upload and initial processing
 - `GET /api/dashboard/:fileId` - Dashboard data with optional filter query params
 - `GET /api/filters/:fileId` - Available filter options for uploaded data
+- `GET /api/charts/top-stores/:fileId` - Top/bottom 30 stores by sales
+- `GET /api/charts/units-by-size/:fileId` - Units sold by size and season
+- `GET /api/charts/sales-vs-transfers/:fileId` - Sales vs transfers by store
+- `GET /api/charts/warehouse-entries/:fileId` - Warehouse entries by season
 - `POST /api/forecast/run` - Create forecast job with ML predictions
 - `GET /api/forecast/:id` - Get forecast job status and results
 - `GET /api/forecast/latest/:fileId` - Get latest forecast for a file
