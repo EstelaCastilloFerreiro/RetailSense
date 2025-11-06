@@ -340,13 +340,19 @@ export function processExcelFile(buffer: Buffer): {
           }
           return false;
         }
-        if (TIENDAS_A_ELIMINAR.includes(v.tienda)) return false;
+        // Match Streamlit: exclude specific stores (with trim to handle whitespace)
+        const tiendaTrimmed = v.tienda.trim();
+        if (TIENDAS_A_ELIMINAR.includes(tiendaTrimmed)) {
+          console.log(`🚫 Filtering out excluded store: "${tiendaTrimmed}"`);
+          return false;
+        }
         // Allow rows even if cantidad is 0, as long as there's a subtotal
         if (v.cantidad === 0 && (!v.subtotal || v.subtotal === 0)) return false;
         return true;
       });
     
-    console.log(`Processed ${ventas.length} ventas records after filtering`);
+    console.log(`✅ Processed ${ventas.length} ventas records after filtering`);
+    console.log(`✅ TIENDAS_A_ELIMINAR applied: ${TIENDAS_A_ELIMINAR.join(', ')}`);
   }
 
   // Process Productos/Compra sheet
@@ -822,7 +828,8 @@ export function processExcelFile(buffer: Buffer): {
         }
       })
       .filter((t: TraspasosData | null): t is TraspasosData => {
-        return t !== null && t.tienda && !TIENDAS_A_ELIMINAR.includes(t.tienda);
+        // Match Streamlit: exclude specific stores (with trim to handle whitespace)
+        return t !== null && t.tienda && !TIENDAS_A_ELIMINAR.includes(t.tienda.trim());
       });
   }
 
