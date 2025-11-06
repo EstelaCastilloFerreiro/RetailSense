@@ -272,8 +272,11 @@ function calculateRotationMetrics(
   
   // Necesitamos al menos 10 datos válidos
   if (ventasConEntrada.length < 10) {
+    console.log(`⚠️  Solo ${ventasConEntrada.length} ventas con rotación válida, se requieren al menos 10`);
     return undefined;
   }
+  
+  console.log(`📊 Rotación de Stock - Procesando ${ventasConEntrada.length} ventas con rotación válida`);
   
   // Calcular rotación por tienda
   const rotacionPorTienda = new Map<string, number[]>();
@@ -332,6 +335,10 @@ function calculateRotationMetrics(
     );
     tiendaMenorRotacion = tiendaMenor.tienda;
     tiendaMenorRotacionDias = tiendaMenor.mediana;
+    
+    console.log(`📊 Rotación por Tienda:`);
+    console.log(`   Mayor Rotación: ${tiendaMayorRotacion} - ${tiendaMayorRotacionDias.toFixed(1)} días`);
+    console.log(`   Menor Rotación: ${tiendaMenorRotacion} - ${tiendaMenorRotacionDias.toFixed(1)} días`);
   }
   
   // Calcular KPIs por producto (familia)
@@ -384,7 +391,17 @@ function calculateRotationMetrics(
     );
     productoMenorRotacion = productoMenor.familia;
     productoMenorRotacionDias = productoMenor.mediana;
+    
+    console.log(`📊 Rotación por Producto (Familia):`);
+    console.log(`   Mayor Rotación: ${productoMayorRotacion} - ${productoMayorRotacionDias.toFixed(1)} días`);
+    console.log(`   Menor Rotación: ${productoMenorRotacion} - ${productoMenorRotacionDias.toFixed(1)} días`);
   }
+  
+  console.log(`📊 Estadísticas Globales:`);
+  console.log(`   Promedio: ${promedioGlobal.toFixed(1)} días`);
+  console.log(`   Mediana: ${medianaGlobal.toFixed(1)} días`);
+  console.log(`   Desv. Estándar: ${desviacionEstandar.toFixed(1)} días`);
+  console.log(`   Total Productos: ${ventasConEntrada.length}`);
   
   return {
     tiendaMayorRotacion,
