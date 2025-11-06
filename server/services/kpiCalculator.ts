@@ -79,6 +79,15 @@ export function calculateKPIs(
   const ventasBrutas = ventasPositivas + devoluciones;
   const ventasNetas = ventasPositivas;
   const tasaDevolucion = ventasNetas > 0 ? (devoluciones / ventasNetas) * 100 : 0;
+  
+  // Debug logging to compare with Streamlit
+  console.log(`📊 KPIs Generales (Excluyendo GR.ART.FICTICIO):`);
+  console.log(`   Ventas Positivas (Total Neto): ${ventasNetas.toFixed(2)}€`);
+  console.log(`   Devoluciones: ${devoluciones.toFixed(2)}€`);
+  console.log(`   Ventas Brutas: ${ventasBrutas.toFixed(2)}€`);
+  console.log(`   Tasa Devolución: ${tasaDevolucion.toFixed(1)}%`);
+  console.log(`   Registros positivos: ${ventasReales.filter(v => v.cantidad > 0).length}`);
+  console.log(`   Registros negativos (devoluciones): ${ventasReales.filter(v => v.cantidad < 0).length}`);
 
   // Calculate by store type
   const ventasFisicas = ventasReales
@@ -102,6 +111,15 @@ export function calculateKPIs(
   const numTiendas = new Set(ventasReales.map(v => v.tienda)).size;
   const numTemporadas = new Set(ventasReales.map(v => v.temporada)).size;
   const numTransacciones = filteredVentas.length;
+  
+  console.log(`📊 Alcance del Análisis:`);
+  console.log(`   Total Familias: ${numFamilias}`);
+  console.log(`   Total Tiendas: ${numTiendas}`);
+  console.log(`   Total Temporadas: ${numTemporadas}`);
+  console.log(`   Total Transacciones: ${numTransacciones}`);
+  console.log(`📊 KPIs por Tipo de Tienda:`);
+  console.log(`   Tiendas Físicas: ${tiendasFisicasCount}, Ventas: ${ventasFisicas.toFixed(2)}€`);
+  console.log(`   Tiendas Online: ${tiendasOnlineCount}, Ventas: ${ventasOnline.toFixed(2)}€`);
 
   return {
     ventasBrutas,
