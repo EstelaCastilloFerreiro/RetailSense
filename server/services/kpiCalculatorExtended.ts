@@ -2324,3 +2324,358 @@ export function calculatePhotoAnalysisData(
     topMenosVendidos,
   };
 }
+
+// ============================================================================
+// NEW CHART FUNCTIONS FOR ADDITIONAL VISUALIZATIONS
+// ============================================================================
+
+export interface TopStoresData {
+  topStores: Array<{
+    tienda: string;
+    unidades: number;
+    beneficio: number;
+    familiaTop: string;
+  }>;
+  bottomStores: Array<{
+    tienda: string;
+    unidades: number;
+    beneficio: number;
+    familiaTop: string;
+  }>;
+}
+
+export function calculateTopStores(
+  ventas: VentasData[],
+  filters?: {
+    temporada?: string | null;
+    familia?: string | null;
+    tiendas?: string[];
+  }
+): TopStoresData {
+  // Filter out GR.ART.FICTICIO and negative quantities
+  let filteredVentas = ventas.filter(
+    v => v.descripcionFamilia !== 'GR.ART.FICTICIO' && (v.cantidad || 0) > 0
+  );
+
+  // Apply filters
+  if (filters?.temporada && filters.temporada !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.temporada === filters.temporada);
+  }
+  if (filters?.familia && filters.familia !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.familia === filters.familia);
+  }
+  if (filters?.tiendas && filters.tiendas.length > 0) {
+    filteredVentas = filteredVentas.filter(v => v.tienda && filters.tiendas!.includes(v.tienda));
+  }
+
+  // Group by store
+  const storeMap = new Map<string, { unidades: number; beneficio: number; familias: Map<string, number> }>();
+
+  filteredVentas.forEach(v => {
+    if (!v.tienda) return;
+
+    if (!storeMap.has(v.tienda)) {
+      storeMap.set(v.tienda, {
+        unidades: 0,
+        beneficio: 0,
+        familias: new Map(),
+      });
+    }
+
+    const data = storeMap.get(v.tienda)!;
+    data.unidades += v.cantidad || 0;
+    data.beneficio += v.subtotal || 0;
+
+    // Track familia sales for top familia
+    const familia = v.descripcionFamilia || 'Sin Familia';
+    data.familias.set(familia, (data.familias.get(familia) || 0) + (v.subtotal || 0));
+  });
+
+  // Convert to array and sort by beneficio
+  const stores = Array.from(storeMap.entries())
+    .map(([tienda, data]) => {
+      // Find top familia
+      let topFamilia = 'Sin datos';
+      let maxVentas = 0;
+      data.familias.forEach((ventas, familia) => {
+        if (ventas > maxVentas) {
+          maxVentas = ventas;
+          topFamilia = familia;
+        }
+      });
+
+      return {
+        tienda,
+        unidades: data.unidades,
+        beneficio: data.beneficio,
+        familiaTop: topFamilia,
+      };
+    })
+    .sort((a, b) => b.beneficio - a.beneficio);
+
+  // Top 30 and Bottom 30
+  const topStores = stores.slice(0, 30);
+  const bottomStores = stores.length > 30 ? stores.slice(-30).reverse() : [];
+
+  return {
+    topStores,
+    bottomStores,
+  };
+}
+
+export interface UnitsBySizeData {
+  data: Array<{
+    talla: string;
+    temporada: string;
+    cantidad: number;
+  }>;
+}
+
+export function calculateUnitsBySize(
+  ventas: VentasData[],
+  filters?: {
+    temporada?: string | null;
+    familia?: string | null;
+    tiendas?: string[];
+  }
+): UnitsBySizeData {
+  // Filter out GR.ART.FICTICIO
+  let filteredVentas = ventas.filter(v => v.descripcionFamilia !== 'GR.ART.FICTICIO');
+
+  // Apply filters
+  if (filters?.temporada && filters.temporada !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.temporada === filters.temporada);
+  }
+  if (filters?.familia && filters.familia !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.familia === filters.familia);
+  }
+  if (filters?.tiendas && filters.tiendas.length > 0) {
+    filteredVentas = filteredVentas.filter(v => v.tienda && filters.tiendas!.includes(v.tienda));
+  }
+
+  // Group by talla and temporada
+  const sizeMap = new Map<string, Map<string, number>>();
+
+  filteredVentas.forEach(v => {
+    const talla = (v.talla || 'Sin Talla').toString().toUpperCase().trim();
+    const temporada = v.temporada || 'Sin Temporada';
+
+    if (!sizeMap.has(talla)) {
+      sizeMap.set(talla, new Map());
+    }
+
+    const temporadaMap = sizeMap.get(talla)!;
+    temporadaMap.set(temporada, (temporadaMap.get(temporada) || 0) + (v.cantidad || 0));
+  });
+
+  // Convert to array
+  const data: Array<{ talla: string; temporada: string; cantidad: number }> = [];
+
+  sizeMap.forEach((temporadaMap, talla) => {
+    temporadaMap.forEach((cantidad, temporada) => {
+      data.push({ talla, temporada, cantidad });
+    });
+  });
+
+  return { data };
+}
+
+export interface SalesVsTransfersData {
+  data: Array<{
+    tienda: string;
+    temporada: string;
+    tipo: 'Ventas' | 'Traspasos';
+    cantidad: number;
+  }>;
+  topStores: string[];
+}
+
+export function calculateSalesVsTransfers(
+  ventas: VentasData[],
+  traspasos: TraspasosData[],
+  filters?: {
+    temporada?: string | null;
+    familia?: string | null;
+    tiendas?: string[];
+  }
+): SalesVsTransfersData {
+  // Filter ventas (exclude GR.ART.FICTICIO)
+  let filteredVentas = ventas.filter(v => v.descripcionFamilia !== 'GR.ART.FICTICIO');
+
+  // Apply filters to ventas
+  if (filters?.temporada && filters.temporada !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.temporada === filters.temporada);
+  }
+  if (filters?.familia && filters.familia !== 'all') {
+    filteredVentas = filteredVentas.filter(v => v.familia === filters.familia);
+  }
+  if (filters?.tiendas && filters.tiendas.length > 0) {
+    filteredVentas = filteredVentas.filter(v => v.tienda && filters.tiendas!.includes(v.tienda));
+  }
+
+  // Get unique códigos from ventas
+  const ventasCodigosSet = new Set(filteredVentas.map(v => v.codigoUnico?.trim()).filter(Boolean));
+
+  // Filter traspasos to only include códigos that exist in ventas
+  let filteredTraspasos = traspasos.filter(t => 
+    t.codigoUnico && ventasCodigosSet.has(t.codigoUnico.trim())
+  );
+
+  // Group ventas by tienda and temporada
+  const ventasMap = new Map<string, Map<string, number>>();
+
+  filteredVentas.forEach(v => {
+    if (!v.tienda) return;
+    const temporada = v.temporada || 'Sin Temporada';
+
+    if (!ventasMap.has(v.tienda)) {
+      ventasMap.set(v.tienda, new Map());
+    }
+
+    const tempMap = ventasMap.get(v.tienda)!;
+    tempMap.set(temporada, (tempMap.get(temporada) || 0) + (v.cantidad || 0));
+  });
+
+  // Group traspasos by tienda and temporada
+  const traspasosMap = new Map<string, Map<string, number>>();
+
+  filteredTraspasos.forEach(t => {
+    if (!t.tienda) return;
+    // Extract first 5 chars of temporada to match ventas format (e.g., "T_PV26" from longer string)
+    const temporada = (t.temporada || 'Sin Temporada').trim().substring(0, 5);
+
+    if (!traspasosMap.has(t.tienda)) {
+      traspasosMap.set(t.tienda, new Map());
+    }
+
+    const tempMap = traspasosMap.get(t.tienda)!;
+    tempMap.set(temporada, (tempMap.get(temporada) || 0) + (t.cantidadEnviada || 0));
+  });
+
+  // Get top 50 stores by sales
+  const storesSales = Array.from(ventasMap.entries())
+    .map(([tienda, tempMap]) => {
+      const total = Array.from(tempMap.values()).reduce((sum, val) => sum + val, 0);
+      return { tienda, total };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const topStores = storesSales.slice(0, 50).map(s => s.tienda);
+
+  // Build combined data
+  const data: Array<{ tienda: string; temporada: string; tipo: 'Ventas' | 'Traspasos'; cantidad: number }> = [];
+
+  // Add ventas data
+  ventasMap.forEach((tempMap, tienda) => {
+    if (!topStores.includes(tienda)) return;
+
+    tempMap.forEach((cantidad, temporada) => {
+      data.push({ tienda, temporada, tipo: 'Ventas', cantidad });
+    });
+  });
+
+  // Add traspasos data
+  traspasosMap.forEach((tempMap, tienda) => {
+    if (!topStores.includes(tienda)) return;
+
+    tempMap.forEach((cantidad, temporada) => {
+      data.push({ tienda, temporada, tipo: 'Traspasos', cantidad });
+    });
+  });
+
+  return { data, topStores };
+}
+
+export interface WarehouseEntriesData {
+  byTheme: Array<{
+    tema: string;
+    familia: string;
+    cantidadPedida: number;
+  }>;
+  byTemporada: {
+    [temporada: string]: {
+      total: number;
+      byFamily: Array<{
+        familia: string;
+        cantidadPedida: number;
+      }>;
+    };
+  };
+}
+
+export function calculateWarehouseEntries(
+  productos: ProductosData[],
+  filters?: {
+    temporada?: string | null;
+    familia?: string | null;
+  }
+): WarehouseEntriesData {
+  let filtered = productos.filter(p => p.cantidadPedida && p.cantidadPedida > 0);
+
+  // Group by tema
+  const themeMap = new Map<string, Map<string, number>>();
+
+  filtered.forEach(p => {
+    const tema = p.tema || 'Sin Tema';
+    const familia = p.familia || 'Sin Familia';
+
+    if (!themeMap.has(tema)) {
+      themeMap.set(tema, new Map());
+    }
+
+    const familiaMap = themeMap.get(tema)!;
+    familiaMap.set(familia, (familiaMap.get(familia) || 0) + (p.cantidadPedida || 0));
+  });
+
+  const byTheme: Array<{ tema: string; familia: string; cantidadPedida: number }> = [];
+
+  themeMap.forEach((familiaMap, tema) => {
+    familiaMap.forEach((cantidad, familia) => {
+      byTheme.push({ tema, familia, cantidadPedida: cantidad });
+    });
+  });
+
+  // Group by temporada (extracted from tema)
+  const byTemporada: {
+    [temporada: string]: {
+      total: number;
+      byFamily: Array<{ familia: string; cantidadPedida: number }>;
+    };
+  } = {};
+
+  filtered.forEach(p => {
+    if (!p.tema) return;
+
+    // Extract temporada from tema (e.g., "T_PV26" from "T_PV26 01 PERLA MEX")
+    const tempMatch = p.tema.match(/T_(OI|PV)\d{2}/);
+    if (!tempMatch) return;
+
+    const temporada = tempMatch[0];
+    const familia = p.familia || 'Sin Familia';
+
+    if (!byTemporada[temporada]) {
+      byTemporada[temporada] = {
+        total: 0,
+        byFamily: [],
+      };
+    }
+
+    byTemporada[temporada].total += p.cantidadPedida || 0;
+
+    // Update family data
+    const familyEntry = byTemporada[temporada].byFamily.find(f => f.familia === familia);
+    if (familyEntry) {
+      familyEntry.cantidadPedida += p.cantidadPedida || 0;
+    } else {
+      byTemporada[temporada].byFamily.push({
+        familia,
+        cantidadPedida: p.cantidadPedida || 0,
+      });
+    }
+  });
+
+  return {
+    byTheme,
+    byTemporada,
+  };
+}

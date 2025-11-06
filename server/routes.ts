@@ -8,7 +8,11 @@ import {
   calculateExtendedDashboardData,
   calculateGeographicMetrics,
   calculateProductProfitabilityMetrics,
-  calculatePhotoAnalysisData
+  calculatePhotoAnalysisData,
+  calculateTopStores,
+  calculateUnitsBySize,
+  calculateSalesVsTransfers,
+  calculateWarehouseEntries
 } from "./services/kpiCalculatorExtended";
 import { processChatbotRequest } from "./services/chatbotService";
 import { createForecastJob, getForecastJob, getLatestForecastJob } from "./services/forecastingService";
@@ -637,6 +641,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Forecast jobs retrieval error:", error);
       res.status(500).json({ 
         error: error.message || "Error retrieving forecast jobs" 
+      });
+    }
+  });
+
+  // ============================================================================
+  // NEW CHART ENDPOINTS
+  // ============================================================================
+
+  // Top Stores endpoint
+  app.get("/api/charts/top-stores/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas } = req.query;
+
+      const ventas = await storage.getVentasData(fileId);
+      if (!ventas || ventas.length === 0) {
+        return res.status(404).json({ error: "No sales data found for this file" });
+      }
+
+      const filters = {
+        temporada: temporada as string | undefined,
+        familia: familia as string | undefined,
+        tiendas: tiendas 
+          ? (Array.isArray(tiendas) ? tiendas as string[] : (tiendas as string).split(','))
+          : undefined,
+      };
+
+      const data = calculateTopStores(ventas, filters);
+      res.json(data);
+    } catch (error: any) {
+      console.error("Top stores calculation error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error calculating top stores" 
+      });
+    }
+  });
+
+  // Units by Size endpoint
+  app.get("/api/charts/units-by-size/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas } = req.query;
+
+      const ventas = await storage.getVentasData(fileId);
+      if (!ventas || ventas.length === 0) {
+        return res.status(404).json({ error: "No sales data found for this file" });
+      }
+
+      const filters = {
+        temporada: temporada as string | undefined,
+        familia: familia as string | undefined,
+        tiendas: tiendas 
+          ? (Array.isArray(tiendas) ? tiendas as string[] : (tiendas as string).split(','))
+          : undefined,
+      };
+
+      const data = calculateUnitsBySize(ventas, filters);
+      res.json(data);
+    } catch (error: any) {
+      console.error("Units by size calculation error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error calculating units by size" 
+      });
+    }
+  });
+
+  // Sales vs Transfers endpoint
+  app.get("/api/charts/sales-vs-transfers/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia, tiendas } = req.query;
+
+      const ventas = await storage.getVentasData(fileId);
+      const traspasos = await storage.getTraspasosData(fileId);
+      
+      if (!ventas || ventas.length === 0) {
+        return res.status(404).json({ error: "No sales data found for this file" });
+      }
+
+      const filters = {
+        temporada: temporada as string | undefined,
+        familia: familia as string | undefined,
+        tiendas: tiendas 
+          ? (Array.isArray(tiendas) ? tiendas as string[] : (tiendas as string).split(','))
+          : undefined,
+      };
+
+      const data = calculateSalesVsTransfers(ventas, traspasos || [], filters);
+      res.json(data);
+    } catch (error: any) {
+      console.error("Sales vs transfers calculation error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error calculating sales vs transfers" 
+      });
+    }
+  });
+
+  // Warehouse Entries endpoint
+  app.get("/api/charts/warehouse-entries/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const { temporada, familia } = req.query;
+
+      const productos = await storage.getProductosData(fileId);
+      if (!productos || productos.length === 0) {
+        return res.status(404).json({ error: "No product data found for this file" });
+      }
+
+      const filters = {
+        temporada: temporada as string | null,
+        familia: familia as string | null,
+      };
+
+      const data = calculateWarehouseEntries(productos, filters);
+      res.json(data);
+    } catch (error: any) {
+      console.error("Warehouse entries calculation error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error calculating warehouse entries" 
       });
     }
   });

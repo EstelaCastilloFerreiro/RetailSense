@@ -4,6 +4,8 @@ import { useData } from "@/contexts/DataContext";
 import VisualizationCard from "./VisualizationCard";
 import KPICard from "./KPICard";
 import SalesMap from "./SalesMap";
+import TopStoresChart from "./TopStoresChart";
+import SalesVsTransfersChart from "./SalesVsTransfersChart";
 import { Card } from "@/components/ui/card";
 import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import {
@@ -335,6 +337,29 @@ export default function GeographicSection() {
             <p className="text-sm text-muted-foreground text-center">No hay datos de Italia disponibles</p>
           </Card>
         )}
+
+        {/* Top 30 Tiendas con Más Ventas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <TopStoresChart 
+            fileId={fileId}
+            filters={stableFilters}
+            showBottom={false}
+          />
+          
+          <TopStoresChart 
+            fileId={fileId}
+            filters={stableFilters}
+            showBottom={true}
+          />
+        </div>
+
+        {/* Ventas vs Traspasos por Tienda */}
+        <div className="mt-6">
+          <SalesVsTransfersChart 
+            fileId={fileId}
+            filters={stableFilters}
+          />
+        </div>
       </div>
     </div>
   );
