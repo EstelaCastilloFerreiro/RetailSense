@@ -513,10 +513,13 @@ export function calculateExtendedDashboardData(
     .filter(v => (v.cantidad || 0) < 0)
     .reduce((sum, v) => sum + Math.abs(v.subtotal || 0), 0);
   
+  // CRITICAL: Match Streamlit logic exactly
+  // Ventas Brutas = Ventas Positivas + Devoluciones (abs)
+  // Total Neto = Ventas Positivas (sin restar devoluciones)
   const kpisFicticio = {
-    ventasBrutas: ventasPositivasFicticio,
+    ventasBrutas: ventasPositivasFicticio + devolucionesFicticio,
     devoluciones: devolucionesFicticio,
-    totalNeto: ventasPositivasFicticio - devolucionesFicticio,
+    totalNeto: ventasPositivasFicticio,
     tasaDevolucion: ventasPositivasFicticio > 0 ? (devolucionesFicticio / ventasPositivasFicticio) * 100 : 0,
   };
   
@@ -524,15 +527,11 @@ export function calculateExtendedDashboardData(
   console.log(`   Total ventas ficticio: ${ventasFicticio.length} registros`);
   console.log(`   Ventas positivas ficticio: ${ventasFicticio.filter(v => (v.cantidad || 0) > 0).length} registros`);
   console.log(`   Ventas negativas ficticio: ${ventasFicticio.filter(v => (v.cantidad || 0) < 0).length} registros`);
-  console.log(`   Ventas Brutas: ${ventasPositivasFicticio.toFixed(2)}€ (esperado: 2,968,127€)`);
+  console.log(`   Ventas Positivas: ${ventasPositivasFicticio.toFixed(2)}€`);
   console.log(`   Devoluciones: ${devolucionesFicticio.toFixed(2)}€`);
-  console.log(`   Total Neto: ${kpisFicticio.totalNeto.toFixed(2)}€`);
-  console.log(`   Sample ventas ficticio (primeras 3):`, ventasFicticio.slice(0, 3).map(v => ({
-    tienda: v.tienda,
-    cantidad: v.cantidad,
-    subtotal: v.subtotal,
-    familia: v.descripcionFamilia
-  })));
+  console.log(`   Ventas Brutas (Positivas + Devoluciones): ${kpisFicticio.ventasBrutas.toFixed(2)}€ (esperado: 2,968,127€)`);
+  console.log(`   Total Neto (solo Positivas): ${kpisFicticio.totalNeto.toFixed(2)}€`);
+  console.log(`   Tasa Devolución: ${kpisFicticio.tasaDevolucion.toFixed(1)}%`);
   
   // Calcular KPIs por tipo de tienda - Match Streamlit logic
   const ventasAnalisis = ventasReales.filter(v => (v.cantidad || 0) > 0);
