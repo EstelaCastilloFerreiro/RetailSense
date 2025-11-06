@@ -1,13 +1,7 @@
 import type { VentasData, ProductosData, TraspasosData, DashboardData } from '@shared/schema';
 
-const TIENDAS_ONLINE = [
-  'ECI NAELLE ONLINE',
-  'ECI ONLINE GESTION',
-  'ET0N ECI ONLINE',
-  'NAELLE ONLINE B2C',
-  'OUTLET TRUCCO ONLINE B2O',
-  'TRUCCO ONLINE B2C',
-];
+// Note: Online stores are now identified dynamically by checking if 'ONLINE' is in the store name
+// This matches Streamlit's logic: df_ventas['Es_Online'] = df_ventas['Tienda'].str.contains('ONLINE', case=False, na=False)
 
 export interface FilterOptions {
   temporada?: string;
@@ -130,7 +124,8 @@ export function getAvailableFilters(ventas: VentasData[]): DashboardData['filter
   const familias = Array.from(new Set(ventas.map(v => v.descripcionFamilia).filter(Boolean))).sort() as string[];
   const tiendas = Array.from(new Set(ventas.map(v => v.tienda).filter(Boolean))).sort() as string[];
   
-  const tiendasOnline = tiendas.filter(t => TIENDAS_ONLINE.includes(t));
+  // Match Streamlit logic: check if 'ONLINE' is in store name
+  const tiendasOnline = tiendas.filter(t => t.toUpperCase().includes('ONLINE'));
   const tiendasNaelle = tiendas.filter(t => t.toUpperCase().includes('NAELLE'));
   const tiendasItalia = tiendas.filter(t => t.toUpperCase().includes('COIN'));
 

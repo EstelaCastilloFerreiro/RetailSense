@@ -180,14 +180,8 @@ export interface ExtendedDashboardData {
   }>;
 }
 
-const TIENDAS_ONLINE = [
-  'ECI NAELLE ONLINE',
-  'ECI ONLINE GESTION',
-  'ET0N ECI ONLINE',
-  'NAELLE ONLINE B2C',
-  'OUTLET TRUCCO ONLINE B2O',
-  'TRUCCO ONLINE B2C'
-];
+// Note: Online stores are now identified dynamically by checking if 'ONLINE' is in the store name
+// This matches Streamlit's logic: df_ventas['Es_Online'] = df_ventas['Tienda'].str.contains('ONLINE', case=False, na=False)
 
 // Función para calcular métricas de rotación de stock (igual que Streamlit)
 function calculateRotationMetrics(
@@ -509,10 +503,10 @@ export function calculateExtendedDashboardData(
     tasaDevolucion: ventasPositivasFicticio > 0 ? (devolucionesFicticio / ventasPositivasFicticio) * 100 : 0,
   };
   
-  // Calcular KPIs por tipo de tienda
+  // Calcular KPIs por tipo de tienda - Match Streamlit logic
   const ventasAnalisis = ventasReales.filter(v => (v.cantidad || 0) > 0);
-  const ventasOnline = ventasAnalisis.filter(v => v.tienda && TIENDAS_ONLINE.includes(v.tienda));
-  const ventasFisicas = ventasAnalisis.filter(v => v.tienda && !TIENDAS_ONLINE.includes(v.tienda));
+  const ventasOnline = ventasAnalisis.filter(v => v.tienda && v.tienda.toUpperCase().includes('ONLINE'));
+  const ventasFisicas = ventasAnalisis.filter(v => v.tienda && !v.tienda.toUpperCase().includes('ONLINE'));
   
   const kpisTienda = {
     tiendasFisicas: new Set(ventasFisicas.map(v => v.codigoTienda).filter(Boolean)).size,
@@ -536,7 +530,8 @@ export function calculateExtendedDashboardData(
     }
     
     const data = ventasMensualesMap.get(v.mes)!;
-    const isOnline = v.tienda && TIENDAS_ONLINE.includes(v.tienda);
+    // Match Streamlit logic: check if 'ONLINE' is in store name
+    const isOnline = v.tienda && v.tienda.toUpperCase().includes('ONLINE');
     
     if (isOnline) {
       data.online.cantidad += v.cantidad || 0;

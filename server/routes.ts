@@ -194,16 +194,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const familias = Array.from(new Set(ventas.map(v => v.descripcionFamilia).filter(Boolean))).sort();
       const tiendas = Array.from(new Set(ventas.map(v => v.tienda).filter(Boolean))).sort();
       
-      const TIENDAS_ONLINE = [
-        'ECI NAELLE ONLINE',
-        'ECI ONLINE GESTION',
-        'ET0N ECI ONLINE',
-        'NAELLE ONLINE B2C',
-        'OUTLET TRUCCO ONLINE B2O',
-        'TRUCCO ONLINE B2C',
-      ];
-
-      const tiendasOnline = tiendas.filter(t => TIENDAS_ONLINE.includes(t));
+      // Match Streamlit logic: check if 'ONLINE' is in store name
+      const tiendasOnline = tiendas.filter(t => t.toUpperCase().includes('ONLINE'));
       const tiendasNaelle = tiendas.filter(t => t.toUpperCase().includes('NAELLE'));
       const tiendasItalia = tiendas.filter(t => t.toUpperCase().includes('COIN'));
 

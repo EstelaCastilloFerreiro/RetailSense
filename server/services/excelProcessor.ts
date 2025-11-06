@@ -62,14 +62,8 @@ const COLUMN_MAPPINGS = {
   },
 };
 
-const TIENDAS_ONLINE = [
-  'ECI NAELLE ONLINE',
-  'ECI ONLINE GESTION',
-  'ET0N ECI ONLINE',
-  'NAELLE ONLINE B2C',
-  'OUTLET TRUCCO ONLINE B2O',
-  'TRUCCO ONLINE B2C',
-];
+// Note: Online stores are now identified dynamically by checking if 'ONLINE' is in the store name
+// This matches Streamlit's logic: df_ventas['Es_Online'] = df_ventas['Tienda'].str.contains('ONLINE', case=False, na=False)
 
 const TIENDAS_A_ELIMINAR = [
   'COMODIN',
@@ -327,7 +321,8 @@ export function processExcelFile(buffer: Buffer): {
             }
           }
           
-          mapped.esOnline = mapped.tienda ? TIENDAS_ONLINE.includes(mapped.tienda) : false;
+          // Match Streamlit logic: check if 'ONLINE' is in store name (case-insensitive)
+          mapped.esOnline = mapped.tienda ? mapped.tienda.toUpperCase().includes('ONLINE') : false;
           
           return mapped as VentasData;
         } catch (error) {
