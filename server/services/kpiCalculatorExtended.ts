@@ -342,50 +342,35 @@ function calculateRotationMetrics(
   }
   
   // Calcular KPIs por producto (familia)
-  // IMPORTANTE: Streamlit agrupa por ['Código único', 'Familia'] pero luego usa solo 'Familia' para el resultado final
-  // Necesitamos reagrupar por familia después de agrupar por clave compuesta
-  const rotacionPorFamilia = new Map<string, number[]>();
-  rotacionPorProducto.forEach((dias, claveProducto) => {
-    // Extraer familia de la clave compuesta (formato: "codigoUnico|familia")
-    const familia = claveProducto.split('|')[1] || 'Sin Familia';
-    if (!rotacionPorFamilia.has(familia)) {
-      rotacionPorFamilia.set(familia, []);
-    }
-    // Agregar todos los días de rotación de este producto
-    dias.forEach(dia => rotacionPorFamilia.get(familia)!.push(dia));
-  });
-  
+  // IMPORTANTE: Streamlit agrupa por ['Código único', 'Familia'] y compara productos individuales
+  // Luego extrae la familia del producto con menor/mayor mediana
   let productoMayorRotacion = 'Sin datos';
   let productoMayorRotacionDias = 0;
   let productoMenorRotacion = 'Sin datos';
   let productoMenorRotacionDias = 0;
   
   // Filtrar productos con mínimo 2 ventas (como Streamlit: Ventas_Con_Rotacion >= 2)
-  // Nota: Streamlit cuenta ventas por producto único, pero aquí contamos por familia
-  // Necesitamos contar cuántos productos únicos tiene cada familia
-  const productosConfiables = Array.from(rotacionPorFamilia.entries())
-    .filter(([familia, dias]) => {
-      // Contar productos únicos de esta familia
-      const productosUnicosFamilia = Array.from(rotacionPorProducto.keys())
-        .filter(clave => clave.split('|')[1] === familia).length;
-      // Requerir al menos 2 productos únicos (como Streamlit requiere >= 2 ventas)
-      return productosUnicosFamilia >= 2 && dias.length >= 2;
-    })
-    .map(([familia, dias]) => ({
-      familia,
-      mediana: calculateMedian(dias),
-      dias,
-    }));
+  const productosConfiables = Array.from(rotacionPorProducto.entries())
+    .filter(([_, dias]) => dias.length >= 2)
+    .map(([claveProducto, dias]) => {
+      const familia = claveProducto.split('|')[1] || 'Sin Familia';
+      return {
+        claveProducto,
+        familia,
+        mediana: calculateMedian(dias),
+        diasCount: dias.length,
+      };
+    });
   
   if (productosConfiables.length > 0) {
-    // Producto con mayor rotación (menor mediana)
+    // Producto con mayor rotación (menor mediana) - comparar productos individuales
     const productoMayor = productosConfiables.reduce((min, curr) => 
       curr.mediana < min.mediana ? curr : min
     );
     productoMayorRotacion = productoMayor.familia;
     productoMayorRotacionDias = productoMayor.mediana;
     
-    // Producto con menor rotación (mayor mediana)
+    // Producto con menor rotación (mayor mediana) - comparar productos individuales
     const productoMenor = productosConfiables.reduce((max, curr) => 
       curr.mediana > max.mediana ? curr : max
     );
