@@ -515,22 +515,6 @@ export default function ProductProfitabilitySection() {
           </div>
         </VisualizationCard>
       )}
-
-      {/* Unidades Vendidas por Talla */}
-      <div className="mt-6">
-        <UnitsBySizeChart 
-          fileId={fileId}
-          filters={stableFilters}
-        />
-      </div>
-
-      {/* Entradas Almacén por Temporada */}
-      <div className="mt-6">
-        <WarehouseEntriesChart 
-          fileId={fileId}
-          filters={stableFilters}
-        />
-      </div>
     </div>
   );
 }
