@@ -231,6 +231,14 @@ function calculateRotationMetrics(
     return undefined;
   }
   
+  // Tiendas excluidas (como Streamlit líneas 41-46)
+  const TIENDAS_EXCLUIDAS = [
+    'COMODIN',
+    'R998- PILOTO',
+    'ECI ONLINE GESTION',
+    'W001 DEVOLUCIONES WEB (NO ENVIAR TRASP)'
+  ];
+  
   // Crear mapa de productos por código único (sin talla para el merge)
   const productosMap = new Map<string, typeof productosRotacion[0]>();
   productosRotacion.forEach(p => {
@@ -249,6 +257,11 @@ function calculateRotationMetrics(
   }> = [];
   
   ventasRotacion.forEach(v => {
+    // Filtrar tiendas excluidas (como Streamlit filtra antes de calcular estadísticas)
+    if (v.tienda && TIENDAS_EXCLUIDAS.includes(v.tienda.trim())) {
+      return; // Excluir esta venta
+    }
+    
     const producto = productosMap.get(v.codigoUnico);
     if (producto && producto.fechaAlmacen && v.fechaVenta) {
       const diasRotacion = Math.floor(
