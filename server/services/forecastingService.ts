@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import MLR from "ml-regression-multivariate-linear";
 import SimpleLinearRegression from "ml-regression-simple-linear";
 import { sampleCorrelation, sampleStandardDeviation, mean } from "simple-statistics";
+import { generateSeasonalForecast, detectLatestSeason, type SeasonType } from "./seasonalForecasting";
 
 /**
  * Forecasting Service con Modelo Predictivo Real de ML
@@ -1357,31 +1358,75 @@ async function processForecast(
       filteredVentas = applyFilters(ventasData, request.filters);
     }
 
-    // Determinar temporada objetivo primero
-    const temporadaObjetivo = getTemporadaObjetivo(filteredVentas, productosData, request.temporadaTipo);
+    console.log(`🚀 Iniciando forecasting estacional para fileId: ${request.fileId}`);
 
-    // Select best model automatically
-    const { model, accuracy, variables } = await selectBestModel(filteredVentas, productosData, request.temporadaTipo);
+    // Usar el nuevo motor de forecasting estacional
+    const seasonType: SeasonType = request.temporadaTipo === 'PV' ? 'PV' : 'OI';
+    const forecastResult = generateSeasonalForecast(filteredVentas, productosData, seasonType);
 
-    // Para forecasting de temporada completa, usar 6 meses (duración de una temporada)
-    // Si no se especifica horizon, usar 6 meses para temporada completa
-    const horizon = request.horizon || 6;
+    if (!forecastResult) {
+      throw new Error("No se pudo generar el forecast. Verifica que haya datos históricos suficientes.");
+    }
 
-    // Generate predictions
-    const predictions = await generatePredictions(
-      filteredVentas,
-      productosData,
-      traspasosData,
-      model,
-      horizon,
-      request.temporadaTipo
-    );
+    console.log(`✅ Forecast generado para temporada: ${forecastResult.targetSeason}`);
+    console.log(`📊 Predicciones: ${forecastResult.predictions.length} productos`);
+    console.log(`📈 MAPE: ${forecastResult.accuracy.mape}%, Coverage: ${forecastResult.accuracy.coverage}%`);
 
-    // Generate purchase plan
-    const purchasePlan = generatePurchasePlan(predictions, filteredVentas, productosData, temporadaObjetivo);
-    purchasePlan.modeloUtilizado = model;
-    purchasePlan.precisionModelo = accuracy;
-    purchasePlan.variablesUtilizadas = variables;
+    // Enriquecer predicciones con datos de productos y ventas
+    const enrichedPredictions = forecastResult.predictions.map(pred => {
+      // Buscar producto en productosData
+      const producto = productosData.find(p => 
+        p.codigoUnico?.trim().toUpperCase().slice(0, 10) === pred.codigoUnico.trim().toUpperCase().slice(0, 10)
+      );
+
+      // Buscar ventas históricas del producto para calcular PVP y coste promedio
+      const ventasProducto = filteredVentas.filter(v => 
+        v.codigoUnico?.trim().toUpperCase().slice(0, 10) === pred.codigoUnico.trim().toUpperCase().slice(0, 10)
+      );
+
+      const pvpPromedio = ventasProducto.length > 0
+        ? ventasProducto.reduce((sum, v) => sum + (v.pvp || 0), 0) / ventasProducto.length
+        : producto?.pvp || 0;
+
+      const costePromedio = ventasProducto.length > 0
+        ? ventasProducto.reduce((sum, v) => sum + (v.coste || 0), 0) / ventasProducto.length
+        : producto?.coste || 0;
+
+      const tallaComun = ventasProducto[0]?.talla || producto?.talla || 'UNICA';
+      const tiendaComun = ventasProducto[0]?.tienda || 'GENERAL';
+      const descripcionFamilia = producto?.descripcionFamilia || pred.familia;
+
+      return {
+        codigoUnico: pred.codigoUnico,
+        familia: pred.familia,
+        descripcionFamilia,
+        seccion: getSeccionFromFamilia(pred.familia, descripcionFamilia),
+        demandaPredicha: pred.predictedDemand,
+        pvp: pvpPromedio,
+        coste: costePromedio,
+        talla: tallaComun,
+        tienda: tiendaComun,
+      };
+    });
+
+    // Crear temporada objetivo para el plan de compras
+    const temporadaObjetivo = {
+      tipo: forecastResult.seasonType,
+      año: forecastResult.targetYear,
+    };
+
+    // Generate purchase plan con las predicciones enriquecidas
+    const purchasePlan = generatePurchasePlan(enrichedPredictions, filteredVentas, productosData, temporadaObjetivo);
+    
+    // Agregar metadata del modelo
+    purchasePlan.modeloUtilizado = "Ensemble (Seasonal Average + Linear Trend + Exponential Smoothing)";
+    purchasePlan.precisionModelo = 100 - forecastResult.accuracy.mape; // Precisión = 100 - MAPE
+    purchasePlan.variablesUtilizadas = [
+      `MAPE: ${forecastResult.accuracy.mape}%`,
+      `Cobertura: ${forecastResult.accuracy.coverage}%`,
+      `Productos: ${forecastResult.predictions.length}`,
+      `Datos históricos: ${forecastResult.dataPoints} registros`,
+    ];
     
     // Log información sobre la temporada objetivo
     if (purchasePlan.temporadaObjetivo) {
@@ -1392,12 +1437,13 @@ async function processForecast(
     await storage.updateForecastJob(jobId, {
       status: "completed",
       completedAt: new Date().toISOString(),
-      model: model as any,
+      model: "seasonal_ensemble" as any,
       results: {
         purchasePlan,
       },
     });
   } catch (error) {
+    console.error("❌ Error en processForecast:", error);
     await storage.updateForecastJob(jobId, {
       status: "failed",
       completedAt: new Date().toISOString(),

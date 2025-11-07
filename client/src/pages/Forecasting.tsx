@@ -46,6 +46,25 @@ export default function Forecasting() {
     },
   });
 
+  // Query para obtener temporadas disponibles
+  const { data: availableSeasons } = useQuery<{
+    latestAvailable: {
+      seasonCode: string;
+      year: number;
+      type: 'PV' | 'OI';
+      label: string;
+    };
+    availableSeasons: Array<{
+      value: 'PV' | 'OI';
+      label: string;
+      year: number;
+      type: 'PV' | 'OI';
+    }>;
+  }>({
+    queryKey: fileId ? [`/api/forecast/available-seasons/${fileId}`] : [],
+    enabled: !!fileId,
+  });
+
   const latestJob = Array.isArray(forecastJobs) && forecastJobs.length > 0 ? forecastJobs[0] : null;
   const purchasePlan = latestJob?.results?.purchasePlan;
   
@@ -131,43 +150,59 @@ export default function Forecasting() {
           {fileId && (
             <Card>
               <CardContent className="pt-6">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex-1 min-w-[250px]">
-                    <label className="text-sm font-medium mb-2 block">Seleccionar Temporada a Predecir</label>
-                    <Select 
-                      value={selectedTemporada || ""} 
-                      onValueChange={(value) => setSelectedTemporada(value as 'PV' | 'OI' | null)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecciona temporada..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PV">Primavera/Verano (P/V)</SelectItem>
-                        <SelectItem value="OI">Otoño/Invierno (O/I)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Predice la temporada siguiente a los datos más recientes disponibles (ej: si datos más recientes son 2025, PV sería 2026)
-                    </p>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      onClick={handleRunForecast}
-                      disabled={runForecastMutation.isPending || latestJob?.status === "running" || !selectedTemporada}
-                      data-testid="button-run-forecast"
-                    >
-                      {runForecastMutation.isPending || latestJob?.status === "running" ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Generar Predicción
-                        </>
-                      )}
-                    </Button>
+                <div className="space-y-4">
+                  {/* Mostrar últimos datos disponibles */}
+                  {availableSeasons?.latestAvailable && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        Últimos datos disponibles: <strong className="text-foreground">{availableSeasons.latestAvailable.label}</strong>
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex-1 min-w-[250px]">
+                      <label className="text-sm font-medium mb-2 block">Seleccionar Temporada a Predecir</label>
+                      <Select 
+                        value={selectedTemporada || ""} 
+                        onValueChange={(value) => setSelectedTemporada(value as 'PV' | 'OI' | null)}
+                        data-testid="select-season"
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecciona temporada..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSeasons?.availableSeasons.map((season) => (
+                            <SelectItem key={season.value} value={season.value}>
+                              {season.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        El sistema entrena el modelo solo con datos históricos de la misma temporada (PV con PV, OI con OI)
+                      </p>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        onClick={handleRunForecast}
+                        disabled={runForecastMutation.isPending || latestJob?.status === "running" || !selectedTemporada}
+                        data-testid="button-run-forecast"
+                      >
+                        {runForecastMutation.isPending || latestJob?.status === "running" ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Procesando...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Generar Predicción
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>

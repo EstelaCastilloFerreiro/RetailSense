@@ -16,6 +16,7 @@ import {
 } from "./services/kpiCalculatorExtended";
 import { processChatbotRequest } from "./services/chatbotService";
 import { createForecastJob, getForecastJob, getLatestForecastJob } from "./services/forecastingService";
+import { detectLatestSeason } from "./services/seasonalForecasting";
 import { forecastRequestSchema } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -641,6 +642,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Forecast jobs retrieval error:", error);
       res.status(500).json({ 
         error: error.message || "Error retrieving forecast jobs" 
+      });
+    }
+  });
+
+  // Get available seasons for forecasting
+  app.get("/api/forecast/available-seasons/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const ventas = await storage.getVentasData(fileId);
+
+      if (!ventas || ventas.length === 0) {
+        return res.status(404).json({ 
+          error: "No sales data found for this file" 
+        });
+      }
+
+      // Detectar última temporada disponible
+      const latestSeason = detectLatestSeason(ventas);
+
+      if (!latestSeason) {
+        return res.status(404).json({ 
+          error: "No valid season data found" 
+        });
+      }
+
+      // Generar opciones para el siguiente año
+      const nextYear = latestSeason.year + 1;
+      const nextYearShort = nextYear.toString().slice(-2);
+
+      const availableSeasons = [
+        {
+          value: 'PV',
+          label: `${nextYearShort}PV - Primavera/Verano ${nextYear}`,
+          year: nextYear,
+          type: 'PV' as const,
+        },
+        {
+          value: 'OI',
+          label: `${nextYearShort}OI - Otoño/Invierno ${nextYear}`,
+          year: nextYear,
+          type: 'OI' as const,
+        },
+      ];
+
+      res.json({
+        latestAvailable: {
+          seasonCode: latestSeason.seasonCode,
+          year: latestSeason.year,
+          type: latestSeason.season,
+          label: `${latestSeason.seasonCode} - ${latestSeason.season === 'PV' ? 'Primavera/Verano' : 'Otoño/Invierno'} ${latestSeason.year}`,
+        },
+        availableSeasons,
+      });
+    } catch (error: any) {
+      console.error("Available seasons retrieval error:", error);
+      res.status(500).json({ 
+        error: error.message || "Error retrieving available seasons" 
       });
     }
   });
