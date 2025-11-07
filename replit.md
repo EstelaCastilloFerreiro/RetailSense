@@ -41,6 +41,26 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
   - TopStoresChart: vertical bars (normal) → horizontal bars (expanded) for better store name legibility
   - SalesVsTransfersChart: 500px→900px height, 9→14px font when expanded
   - Hover "Expandir" button opens full-screen modal with larger, more readable visualizations
+  - Fixed layout conditional (now uses layout={expanded ? 'vertical' : 'horizontal'} correctly)
+  - Changed from Top 30 to Top 15 stores for better readability
+- ✅ **KPIs por Zona Fix** (Nov 7, 2025):
+  - Copied exact Streamlit logic for Mejor/Peor Tienda calculation
+  - Orders stores by CANTIDAD (not beneficio) like Streamlit
+  - Calculates mediaZona and %_vs_Media exactly as Streamlit does
+  - Cleans problematic store names (COMODIN → "Sin Asignar")
+- ✅ **OpenAI Chatbot Integration** (Nov 7, 2025):
+  - Configured OpenAI API key (gpt-4o-mini)
+  - Chatbot can answer questions using AI with access to detailed stats
+  - Can generate basic visualizations (bar, line, pie, table) based on user requests
+  - Fallback system if OpenAI fails
+- ✅ **Seasonal Forecasting Model** (Nov 7, 2025 - IN PROGRESS):
+  - Created seasonalForecasting.ts module from scratch
+  - Auto-detects latest season/year in data
+  - Filters historical data by season type (PV or OI)
+  - Implements 3 ML models: Seasonal Moving Average, Linear Trend, Exponential Smoothing
+  - Ensemble selector chooses best model per product based on confidence
+  - Calculates MAPE and coverage metrics
+  - Ready for integration with forecastingService.ts
 
 ## User Preferences
 
