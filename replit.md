@@ -53,14 +53,27 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
   - Chatbot can answer questions using AI with access to detailed stats
   - Can generate basic visualizations (bar, line, pie, table) based on user requests
   - Fallback system if OpenAI fails
-- ✅ **Seasonal Forecasting Model** (Nov 7, 2025 - IN PROGRESS):
-  - Created seasonalForecasting.ts module from scratch
-  - Auto-detects latest season/year in data
-  - Filters historical data by season type (PV or OI)
-  - Implements 3 ML models: Seasonal Moving Average, Linear Trend, Exponential Smoothing
-  - Ensemble selector chooses best model per product based on confidence
-  - Calculates MAPE and coverage metrics
-  - Ready for integration with forecastingService.ts
+- ✅ **Seasonal Forecasting Model - COMPLETE** (Nov 7, 2025):
+  - Created seasonalForecasting.ts module from scratch (~350 lines)
+  - Auto-detects latest season/year in data (detectLatestSeason)
+  - Filters historical data by season type (PV or OI) - trains only with matching seasons
+  - Implements 3 ML models: Seasonal Moving Average, Linear Trend (ml-regression), Exponential Smoothing
+  - Ensemble selector chooses best model per product based on confidence/R²
+  - Calculates MAPE (Mean Absolute Percentage Error) and coverage metrics
+  - **Fully integrated** with forecastingService.ts:
+    - processForecast() uses generateSeasonalForecast()
+    - Enriches predictions with PVP, coste, sección from historical data
+    - Generates Plan de Compras por SECCIÓN (as per requirements)
+    - Logs detailed metrics: MAPE, coverage, products predicted
+  - **New endpoint** GET /api/forecast/available-seasons/:fileId:
+    - Detects latest available season in uploaded data
+    - Returns options for next year (PV and OI)
+    - Example: "Últimos datos: 25OI" → Options: "26PV - Primavera/Verano 2026", "26OI - Otoño/Invierno 2026"
+  - **Frontend UI** (Forecasting.tsx):
+    - Shows "Últimos datos disponibles: X"
+    - Dynamic season selector populated from backend
+    - Descriptive text: "El sistema entrena el modelo solo con datos históricos de la misma temporada"
+    - Conditional queryKey to prevent /undefined requests
 
 ## User Preferences
 
