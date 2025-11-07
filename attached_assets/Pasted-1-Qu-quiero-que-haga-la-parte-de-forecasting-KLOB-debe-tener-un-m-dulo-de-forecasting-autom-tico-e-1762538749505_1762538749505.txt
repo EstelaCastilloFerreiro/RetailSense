@@ -1,0 +1,59 @@
+1. Qué quiero que haga la parte de forecasting
+KLOB debe tener un módulo de forecasting automático específico para retail moda que:
+Elija automáticamente el mejor modelo de ML (no lo elige el usuario).
+Tenga en cuenta la estacionalidad clara del sector (PV / OI).
+Permita al usuario elegir qué temporada futura quiere predecir.
+Devuelva como resultado un Plan de Compras en formato tabla/gráfico como la imagen (UDS, PVP, coste, profundidad, opciones, markdown, sobrante, etc.).
+2. Elección automática del mejor modelo de ML
+Internamente, el sistema:
+Prueba varios algoritmos de predicción (distintos modelos de ML).
+Entrena y valida cada modelo con los datos históricos del cliente (ventas, unidades, precios, temporadas…).
+Calcula métricas de error específicas de forecasting (por ejemplo MAPE, RMSE).
+Selecciona automáticamente el modelo con mejor precisión para ese cliente y esa temporada (el de menor error).
+Ese modelo “ganador” es el que se usa para generar las predicciones de unidades y PVP para la temporada seleccionada.
+👉 El usuario no ve ni elige algoritmos. Solo ve que el sistema está usando “el mejor modelo disponible” para su histórico.
+3. Lógica de temporadas (PV / OI)
+Queremos trabajar siempre por temporada:
+Modelo PV: se entrena solo con todas las temporadas Primavera–Verano (PV) históricas.
+Modelo OI: se entrena solo con todas las temporadas Otoño–Invierno (OI) históricas.
+Ejemplo:
+Si en el Excel hay datos desde 2020 PV hasta 2025 OI:
+El sistema identifica que el último año disponible es 2025.
+En la interfaz aparece un desplegable para elegir:
+“Predecir 2026 PV”
+“Predecir 2026 OI”
+Según lo que el usuario elija:
+Si selecciona 2026 PV → se usa el modelo PV (entrenado con todas las PV anteriores).
+Si selecciona 2026 OI → se usa el modelo OI (entrenado con todas las OI anteriores).
+4. Interfaz para el usuario
+El usuario sube su Excel / CSV con datos históricos.
+El sistema detecta automáticamente el último año y temporada presentes en el archivo.
+En la pantalla de forecasting aparece:
+Texto tipo: “Últimos datos disponibles: 2025 OI”.
+Un desplegable:
+“Predecir 2026 PV”
+“Predecir 2026 OI”
+El usuario elige la temporada que quiere planificar.
+KLOB lanza el modelo correspondiente (PV u OI), usando el mejor algoritmo elegido automáticamente.
+Se genera el Plan de Compras y se muestra en el dashboard.
+5. Output: Plan de Compras tipo la tabla OI26
+El resultado del modelo no es solo una serie de números sueltos, sino una tabla de Plan de Compras por SECCIÓN, muy similar a la que has puesto en la imagen.
+Para cada sección (FALDAS, PANTALÓN, CAMISAS Y TOP, CHAQUETAS, JERSEIS, etc.) el sistema debe calcular y mostrar, como mínimo:
+% sección (peso de cada sección sobre el total PVP).
+UDS: unidades totales a comprar para esa sección.
+PVP: PVP total previsto (ventas en €).
+COSTE: coste total de compra.
+PROF (profundidad): unidades medias por opción / por tienda.
+OPC: número de opciones (modelos/estilos) recomendados.
+PM Cte: precio medio de coste.
+PM Vta: precio medio de venta.
+Mk: margen o mark-up.
+MARKDOWN: % de depreciación previsto.
+SOBRANTE: % de sobrante objetivo (ej. 8%) y, opcionalmente, cálculo por tienda y por talla.
+Y abajo, como en tu plantilla:
+TOTAL PRENDAS
+TOTAL COMPLEMENTOS
+TOTAL TRUCCO (o la marca/cliente que sea)
+Todo esto se puede mostrar:
+En tabla (tipo Excel) dentro del dashboard.
+Y si quieres, también en gráficas (barras por sección, comparativas de PVP vs coste, etc.).
