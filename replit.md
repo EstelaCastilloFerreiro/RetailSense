@@ -32,6 +32,15 @@ KLOB is a SaaS-style retail analytics and prediction platform designed for retai
   - Units by Size - stacked bars showing quantity by talla and temporada in Products section
   - Sales vs Transfers - comparison chart by store in Geographic section
   - Warehouse Entries by Season - bar chart in Products section
+- ✅ **Stock Rotation Fix** (Nov 7, 2025):
+  - Fixed codigoUnico normalization (trim + uppercase + slice(0,10)) on both ventas and productos for proper merge
+  - Added TIENDAS_EXCLUIDAS filter before rotation statistics calculation
+  - Increased rotation matches from ~106 to ~4,730 products as expected
+- ✅ **Expandable Charts** (Nov 7, 2025):
+  - Created reusable ExpandableChart component with render prop pattern
+  - TopStoresChart: vertical bars (normal) → horizontal bars (expanded) for better store name legibility
+  - SalesVsTransfersChart: 500px→900px height, 9→14px font when expanded
+  - Hover "Expandir" button opens full-screen modal with larger, more readable visualizations
 
 ## User Preferences
 
