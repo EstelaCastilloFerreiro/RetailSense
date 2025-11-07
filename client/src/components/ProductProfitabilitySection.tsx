@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useData } from "@/contexts/DataContext";
 import VisualizationCard from "./VisualizationCard";
 import KPICard from "./KPICard";
-import UnitsBySizeChart from "./UnitsBySizeChart";
-import WarehouseEntriesChart from "./WarehouseEntriesChart";
 import { Card } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";

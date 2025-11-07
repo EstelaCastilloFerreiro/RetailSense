@@ -21,8 +21,18 @@ interface SalesVsTransfersChartProps {
   };
 }
 
+interface SalesVsTransfersData {
+  data: Array<{
+    tienda: string;
+    temporada: string;
+    tipo: 'Ventas' | 'Traspasos';
+    cantidad: number;
+  }>;
+  topStores: string[];
+}
+
 export default function SalesVsTransfersChart({ fileId, filters }: SalesVsTransfersChartProps) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<SalesVsTransfersData>({
     queryKey: ['/api/charts/sales-vs-transfers', fileId, filters],
     enabled: !!fileId,
   });
@@ -48,43 +58,56 @@ export default function SalesVsTransfersChart({ fileId, filters }: SalesVsTransf
     );
   }
 
-  // Group data by tienda for grouped bars
+  // Get unique temporadas and sort them
+  const temporadas = Array.from(new Set(data.data.map(item => item.temporada))).sort();
+  
+  // Create color mapping for temporadas (cycling through colors)
+  const temporadaColors: Record<string, string> = {};
+  temporadas.forEach((temp, idx) => {
+    temporadaColors[temp] = getColorByIndex(idx);
+  });
+  
+  // Transform data for stacked bars by temporada
+  // Structure: { tienda: string, Ventas_T_PV25: number, Ventas_T_PV26: number, Traspasos_T_PV25: number, ... }
   const tiendaMap = new Map<string, any>();
   
   data.data.forEach((item) => {
-    const key = item.tienda;
-    
-    if (!tiendaMap.has(key)) {
-      tiendaMap.set(key, { tienda: item.tienda });
+    if (!tiendaMap.has(item.tienda)) {
+      tiendaMap.set(item.tienda, { tienda: item.tienda });
     }
     
-    const tiendaData = tiendaMap.get(key);
-    
-    // Sum quantities by tipo (Ventas or Traspasos)
-    if (item.tipo === 'Ventas') {
-      tiendaData.ventas = (tiendaData.ventas || 0) + item.cantidad;
-    } else {
-      tiendaData.traspasos = (tiendaData.traspasos || 0) + item.cantidad;
-    }
+    const tiendaData = tiendaMap.get(item.tienda);
+    const key = `${item.tipo}_${item.temporada}`;
+    tiendaData[key] = (tiendaData[key] || 0) + item.cantidad;
   });
 
   const chartData = Array.from(tiendaMap.values())
-    .sort((a, b) => (b.ventas || 0) - (a.ventas || 0))
-    .slice(0, 30); // Show top 30 stores
+    .map(tienda => {
+      // Calculate total ventas for sorting
+      const totalVentas = temporadas.reduce((sum, temp) => {
+        return sum + (tienda[`Ventas_${temp}`] || 0);
+      }, 0);
+      return { ...tienda, _totalVentas: totalVentas };
+    })
+    .sort((a, b) => b._totalVentas - a._totalVentas)
+    .slice(0, 50); // Show top 50 stores as per Streamlit
 
   return (
     <Card className="p-6">
       <h3 className="text-lg font-medium mb-4">Ventas vs Traspasos por Tienda</h3>
-      <ResponsiveContainer width="100%" height={400}>
+      <div className="mb-2 text-sm text-muted-foreground">
+        Top 50 tiendas por ventas totales. Barras apiladas por temporada.
+      </div>
+      <ResponsiveContainer width="100%" height={500}>
         <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
           <XAxis
             dataKey="tienda"
             angle={-45}
             textAnchor="end"
-            height={120}
+            height={150}
             interval={0}
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 9 }}
           />
           <YAxis tickFormatter={(value) => value.toLocaleString('es-ES')} />
           <Tooltip
@@ -95,19 +118,31 @@ export default function SalesVsTransfersChart({ fileId, filters }: SalesVsTransf
             }}
             formatter={(value: number) => value.toLocaleString('es-ES')}
           />
-          <Legend />
-          <Bar
-            dataKey="ventas"
-            fill={getColorByIndex(0)}
-            opacity={0.8}
-            name="Ventas"
-          />
-          <Bar
-            dataKey="traspasos"
-            fill="#ffc107"
-            opacity={0.8}
-            name="Traspasos"
-          />
+          <Legend wrapperStyle={{ fontSize: '12px' }} />
+          
+          {/* Ventas bars stacked by temporada */}
+          {temporadas.map((temp, idx) => (
+            <Bar
+              key={`ventas-${temp}`}
+              dataKey={`Ventas_${temp}`}
+              stackId="ventas"
+              fill={temporadaColors[temp]}
+              opacity={0.9}
+              name={`Ventas ${temp}`}
+            />
+          ))}
+          
+          {/* Traspasos bars stacked by temporada */}
+          {temporadas.map((temp, idx) => (
+            <Bar
+              key={`traspasos-${temp}`}
+              dataKey={`Traspasos_${temp}`}
+              stackId="traspasos"
+              fill={temporadaColors[temp]}
+              opacity={0.6}
+              name={`Traspasos ${temp}`}
+            />
+          ))}
         </BarChart>
       </ResponsiveContainer>
     </Card>
