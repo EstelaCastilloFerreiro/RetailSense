@@ -30,7 +30,7 @@ export default function TopStoresChart({ fileId, filters, showBottom = false, is
     enabled: !!fileId,
   });
 
-  const title = showBottom ? "Top 30 tiendas con menos ventas" : "Top 30 tiendas con más ventas";
+  const title = showBottom ? "Top 15 tiendas con menos ventas" : "Top 15 tiendas con más ventas";
 
   if (isLoading) {
     return (
@@ -65,7 +65,7 @@ export default function TopStoresChart({ fileId, filters, showBottom = false, is
         <Card className="p-6">
           <h3 className="text-lg font-medium mb-4">{title}</h3>
           <ResponsiveContainer width="100%" height={height}>
-            <BarChart data={chartData} layout={expanded ? "horizontal" : "vertical"}>
+            <BarChart data={chartData} layout={expanded ? "vertical" : "horizontal"}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
               {expanded ? (
                 <>

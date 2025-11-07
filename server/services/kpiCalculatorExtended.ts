@@ -612,14 +612,14 @@ export function calculateExtendedDashboardData(
     }))
     .sort((a, b) => b.beneficio - a.beneficio);
   
-  // Top 30 con rankings correctos (1-30)
-  const topTiendas = tiendas.slice(0, 30).map((item, index) => ({
+  // Top 15 con rankings correctos (1-15)
+  const topTiendas = tiendas.slice(0, 15).map((item, index) => ({
     ...item,
     ranking: index + 1,
   }));
   
-  // Bottom 30 con rankings correctos (1-30, siendo 1 el peor)
-  const bottomTiendas = tiendas.slice(-30).reverse().map((item, index) => ({
+  // Bottom 15 con rankings correctos (1-15, siendo 1 el peor)
+  const bottomTiendas = tiendas.slice(-15).reverse().map((item, index) => ({
     ...item,
     ranking: index + 1,
   }));
@@ -1582,13 +1582,30 @@ export function calculateGeographicMetrics(
   });
   
   const kpisPorZona = Array.from(zonaMap.entries()).map(([zona, tiendasMap]) => {
+    // Limpiar nombres de tiendas problemáticos (como Streamlit)
     const tiendas = Array.from(tiendasMap.entries())
-      .map(([tienda, data]) => ({ tienda, ...data }))
-      .sort((a, b) => b.beneficio - a.beneficio);
+      .map(([tienda, data]) => {
+        let tiendaLimpia = tienda;
+        if (!tienda || tienda === 'COMODIN' || tienda === 'nan' || tienda === 'None' || tienda === '') {
+          tiendaLimpia = 'Sin Asignar';
+        }
+        return { tienda: tiendaLimpia, ...data };
+      });
     
-    const mejor = tiendas[0] || { tienda: 'N/A', cantidad: 0, beneficio: 0 };
-    const peor = tiendas[tiendas.length - 1] || { tienda: 'N/A', cantidad: 0, beneficio: 0 };
-    const mediaBeneficio = tiendas.reduce((sum, t) => sum + t.beneficio, 0) / tiendas.length;
+    // Calcular media de Cantidad por zona (como Streamlit)
+    const mediaZona = tiendas.reduce((sum, t) => sum + t.cantidad, 0) / (tiendas.length || 1);
+    
+    // Encontrar mejor tienda por CANTIDAD (no beneficio) - como Streamlit línea 2165
+    const tiendasOrdenadas = [...tiendas].sort((a, b) => b.cantidad - a.cantidad);
+    const mejor = tiendasOrdenadas[0] || { tienda: 'N/A', cantidad: 0, beneficio: 0 };
+    
+    // Encontrar peor tienda por CANTIDAD (no beneficio) - como Streamlit línea 2173
+    const peor = tiendasOrdenadas[tiendasOrdenadas.length - 1] || { tienda: 'N/A', cantidad: 0, beneficio: 0 };
+    
+    // Calcular %_vs_Media para la peor tienda (como Streamlit líneas 2148-2154)
+    const porcentajeVsMedia = mediaZona > 0 
+      ? Number((((peor.cantidad - mediaZona) / mediaZona) * 100).toFixed(1))
+      : 0;
     
     return {
       zona,
@@ -1598,7 +1615,8 @@ export function calculateGeographicMetrics(
       peorTienda: peor.tienda,
       peorCantidad: peor.cantidad,
       peorBeneficio: peor.beneficio,
-      mediaBeneficio,
+      porcentajeVsMedia,
+      mediaZona,
     };
   });
   
@@ -2415,9 +2433,9 @@ export function calculateTopStores(
     })
     .sort((a, b) => b.beneficio - a.beneficio);
 
-  // Top 30 and Bottom 30
-  const topStores = stores.slice(0, 30);
-  const bottomStores = stores.length > 30 ? stores.slice(-30).reverse() : [];
+  // Top 15 and Bottom 15
+  const topStores = stores.slice(0, 15);
+  const bottomStores = stores.length > 15 ? stores.slice(-15).reverse() : [];
 
   return {
     topStores,
