@@ -2,78 +2,9 @@
 
 ## Overview
 
-KLOB is a SaaS-style retail analytics and prediction platform designed for retail brands and SMEs. The platform enables clients to upload historical sales data (Excel/CSV files) and receive instant insights through automated dashboards, demand forecasting, price optimization, and inventory management recommendations. The system supports multi-tenant operations where each client can have customized data preprocessing pipelines that automatically detect and adapt to their specific Excel/CSV structures.
+KLOB is a SaaS retail analytics and prediction platform for brands and SMEs. It enables clients to upload historical sales data (Excel/CSV) to generate instant insights through automated dashboards, demand forecasting, price optimization, and inventory management recommendations. The platform supports multi-tenant operations with customized data preprocessing pipelines that adapt to specific Excel/CSV structures. Its core value proposition is to provide purchasing plans, pricing recommendations, and comprehensive sales/inventory dashboards personalized to the client's data.
 
-**Core Value Proposition**: Upload retail data → Get purchasing plans + pricing recommendations + comprehensive sales/inventory dashboards personalized to your data structure.
-
-**Key Features**:
-- Multi-file Excel/CSV upload with automatic structure detection (tested with 114k+ sales records)
-- Client-specific preprocessing pipelines with Spanish column header support
-- Retail KPI dashboards (sales analysis, returns tracking, stock rotation, top products, sales by region/store)
-- Advanced filtering by Season (Temporada), Product Family (Familia), and Stores (Tiendas)
-- Special handling for online stores, Naelle stores, and COIN/Italia stores
-- Real-time KPI calculations excluding GR.ART.FICTICIO pseudo-products
-
-**Recent Updates (Nov 2025)**:
-- ✅ Successfully migrated from Streamlit to React with KLOB maroon branding (HSL 0 65% 35%)
-- ✅ Excel processor updated for TRUCCO data structure (ventas 23 24 25, Compra, Traspasos de almacén a tienda)
-- ✅ Column mappings aligned with actual Spanish headers (Artículo, NombreTPV, Fecha Documento, Descripción Color)
-- ✅ Filter UX improved: selections are local until "Aplicar Filtros" button is clicked
-- ✅ Processing 114,684 ventas, 5,165 productos, 14,039 traspasos from real client data
-- ✅ Login page implemented with "Retail Analytics" branding and KLOB logo
-- ✅ Protected routes system using localStorage authentication
-- ✅ KPI numbers size reduced (text-2xl) for better visual balance
-- ✅ Three-section navigation structure with Shadcn sidebar (Analytics, Forecasting, Sentiment Analysis)
-- ✅ Forecasting backend complete with mock ML predictions and API endpoints
-- ✅ Section-aware chatbot integration across all sections
-- ✅ Sentiment Analysis placeholder page ready for future development
-- ✅ **New Analytics Charts** (Nov 6, 2025):
-  - Top 30 Stores (most/least sales) - horizontal bar charts in Geographic section
-  - Units by Size - stacked bars showing quantity by talla and temporada in Products section
-  - Sales vs Transfers - comparison chart by store in Geographic section
-  - Warehouse Entries by Season - bar chart in Products section
-- ✅ **Stock Rotation Fix** (Nov 7, 2025):
-  - Fixed codigoUnico normalization (trim + uppercase + slice(0,10)) on both ventas and productos for proper merge
-  - Added TIENDAS_EXCLUIDAS filter before rotation statistics calculation
-  - Increased rotation matches from ~106 to ~4,730 products as expected
-- ✅ **Expandable Charts** (Nov 7, 2025):
-  - Created reusable ExpandableChart component with render prop pattern
-  - TopStoresChart: vertical bars (normal) → horizontal bars (expanded) for better store name legibility
-  - SalesVsTransfersChart: 500px→900px height, 9→14px font when expanded
-  - Hover "Expandir" button opens full-screen modal with larger, more readable visualizations
-  - Fixed layout conditional (now uses layout={expanded ? 'vertical' : 'horizontal'} correctly)
-  - Changed from Top 30 to Top 15 stores for better readability
-- ✅ **KPIs por Zona Fix** (Nov 7, 2025):
-  - Copied exact Streamlit logic for Mejor/Peor Tienda calculation
-  - Orders stores by CANTIDAD (not beneficio) like Streamlit
-  - Calculates mediaZona and %_vs_Media exactly as Streamlit does
-  - Cleans problematic store names (COMODIN → "Sin Asignar")
-- ✅ **OpenAI Chatbot Integration** (Nov 7, 2025):
-  - Configured OpenAI API key (gpt-4o-mini)
-  - Chatbot can answer questions using AI with access to detailed stats
-  - Can generate basic visualizations (bar, line, pie, table) based on user requests
-  - Fallback system if OpenAI fails
-- ✅ **Seasonal Forecasting Model - COMPLETE** (Nov 7, 2025):
-  - Created seasonalForecasting.ts module from scratch (~350 lines)
-  - Auto-detects latest season/year in data (detectLatestSeason)
-  - Filters historical data by season type (PV or OI) - trains only with matching seasons
-  - Implements 3 ML models: Seasonal Moving Average, Linear Trend (ml-regression), Exponential Smoothing
-  - Ensemble selector chooses best model per product based on confidence/R²
-  - Calculates MAPE (Mean Absolute Percentage Error) and coverage metrics
-  - **Fully integrated** with forecastingService.ts:
-    - processForecast() uses generateSeasonalForecast()
-    - Enriches predictions with PVP, coste, sección from historical data
-    - Generates Plan de Compras por SECCIÓN (as per requirements)
-    - Logs detailed metrics: MAPE, coverage, products predicted
-  - **New endpoint** GET /api/forecast/available-seasons/:fileId:
-    - Detects latest available season in uploaded data
-    - Returns options for next year (PV and OI)
-    - Example: "Últimos datos: 25OI" → Options: "26PV - Primavera/Verano 2026", "26OI - Otoño/Invierno 2026"
-  - **Frontend UI** (Forecasting.tsx):
-    - Shows "Últimos datos disponibles: X"
-    - Dynamic season selector populated from backend
-    - Descriptive text: "El sistema entrena el modelo solo con datos históricos de la misma temporada"
-    - Conditional queryKey to prevent /undefined requests
+Key capabilities include multi-file upload with automatic structure detection, client-specific preprocessing with Spanish header support, retail KPI dashboards (sales, returns, stock rotation, top products, sales by region/store), advanced filtering, and special handling for different store types.
 
 ## User Preferences
 
@@ -83,146 +14,48 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend Architecture
 
-**Framework**: React 18 with TypeScript, Vite build system
-
-**UI Component Library**: Radix UI primitives with shadcn/ui component system
-- Design philosophy: Carbon Design/Ant Design inspired for data-heavy B2B SaaS
-- Theme system: Custom dark/light mode with CSS variables for colors
-- Typography: Inter for UI/body, JetBrains Mono for numerical data
-- Layout: Tailwind CSS with custom spacing scale optimized for data density
-
-**State Management**:
-- React Context API (`DataContext`) for global state (file uploads, active filters)
-- TanStack Query (React Query) for server state management and caching
-- Local component state for UI interactions
-
-**Routing**: Wouter (lightweight client-side routing)
-- `/` - Upload page
-- `/analytics` - Analytics section with BI dashboards and KPI visualizations
-- `/forecasting` - Forecasting section with ML-based demand prediction and price optimization
-- `/sentiment` - Sentiment Analysis section (placeholder for future development)
-- `/dashboard` - Legacy route (redirects to /analytics for backward compatibility)
-
-**Key Frontend Components**:
-- `AppSidebar`: Shadcn sidebar with three-section navigation (Analytics, Forecasting, Sentiment)
-- `FileUpload`: Drag-and-drop Excel/CSV upload with progress tracking
-- `FilterSidebar`: Dynamic filtering by temporada (season), familia (product family), tiendas (stores)
-- `DashboardTabs`: Tabbed interface (Overview, Geographic/Stores, Products/Campaigns)
-- `KPICard`: Reusable metric display with trend indicators
-- `Chatbot`: Section-aware AI assistant for visualizations and queries
-- Chart components: Demand forecasting, price optimization, regional sales, inventory tables, top products
-- **New Analytics Charts**:
-  - `TopStoresChart`: Top/bottom 30 stores by sales with horizontal bars
-  - `UnitsBySizeChart`: Units sold by size (talla) stacked by season
-  - `SalesVsTransfersChart`: Store-level sales vs transfers comparison
-  - `WarehouseEntriesChart`: Warehouse entries aggregated by season
+**Framework**: React 18 with TypeScript and Vite.
+**UI/UX**: Radix UI primitives with shadcn/ui components, inspired by Carbon/Ant Design for data-heavy B2B SaaS. Features a custom dark/light mode, Inter font for UI, and JetBrains Mono for numerical data. Tailwind CSS is used for layout.
+**State Management**: React Context API for global state, TanStack Query for server state and caching.
+**Routing**: Wouter, handling routes for `/`, `/analytics`, `/forecasting`, and `/sentiment`.
+**Key Components**: `AppSidebar`, `FileUpload`, `FilterSidebar`, `DashboardTabs`, `KPICard`, and a section-aware `Chatbot`. Includes various charting components for sales, transfers, units by size, and warehouse entries, with expandable chart functionality.
 
 ### Backend Architecture
 
-**Framework**: Express.js with TypeScript (ES modules)
-
-**API Design**: RESTful HTTP endpoints
-- `POST /api/upload` - File upload and initial processing
-- `GET /api/dashboard/:fileId` - Dashboard data with optional filter query params
-- `GET /api/filters/:fileId` - Available filter options for uploaded data
-- `GET /api/charts/top-stores/:fileId` - Top/bottom 30 stores by sales
-- `GET /api/charts/units-by-size/:fileId` - Units sold by size and season
-- `GET /api/charts/sales-vs-transfers/:fileId` - Sales vs transfers by store
-- `GET /api/charts/warehouse-entries/:fileId` - Warehouse entries by season
-- `POST /api/forecast/run` - Create forecast job with ML predictions
-- `GET /api/forecast/:id` - Get forecast job status and results
-- `GET /api/forecast/latest/:fileId` - Get latest forecast for a file
-- `POST /api/chatbot/:fileId` - Section-aware chatbot queries
-
-**File Processing Pipeline**:
-1. Multer middleware handles file uploads (50MB limit, Excel/CSV only)
-2. Column structure detection using XLSX library
-3. Automatic mapping of Spanish column headers to schema
-4. Data transformation into normalized schemas (Ventas, Productos, Traspasos)
-5. Client-specific configuration storage for repeat uploads
-
-**Data Processing Services**:
-- `excelProcessor.ts`: Column detection, structure mapping, sheet parsing
-- `kpiCalculator.ts`: Business logic for KPI calculations, filtering, aggregations
-- `forecastingService.ts`: ML-based demand prediction with mock models (CatBoost/XGBoost/Prophet)
-- `chatbotService.ts`: Section-aware chatbot with visualization generation
-- Separation of data processing logic from API routes for maintainability
-
-**Storage Strategy**:
-- In-memory storage implementation (`MemStorage`) for development
-- Interface-based design (`IStorage`) allows easy swap to persistent database
-- Separate storage for: uploaded files metadata, client configs, sales data, product data, transfer data, forecast jobs
+**Framework**: Express.js with TypeScript.
+**API Design**: RESTful HTTP endpoints for file upload, dashboard data, filter options, various charts, forecast job management, and chatbot queries.
+**File Processing Pipeline**: Utilizes Multer for uploads, XLSX for column detection, automatic mapping of Spanish headers, and transformation into normalized schemas (Ventas, Productos, Traspasos). Client-specific configurations are stored for repeat uploads.
+**Data Processing Services**: `excelProcessor.ts`, `kpiCalculator.ts`, `forecastingService.ts` (ML-based demand prediction with Seasonal Moving Average, Linear Trend, and Exponential Smoothing models), and `chatbotService.ts` provide modular business logic.
+**Storage Strategy**: Interface-based design (`IStorage`) supporting both in-memory development storage and persistent database storage.
 
 ### Data Storage Solutions
 
-**Current Implementation**: In-memory Map-based storage (development/demo mode)
-
-**Database Ready**: 
-- Drizzle ORM configured with PostgreSQL dialect
-- Schema definitions in `shared/schema.ts` using Zod
-- Migration support via `drizzle-kit`
-- Connection setup for Neon serverless PostgreSQL
-
-**Data Models**:
-- **UploadedFile**: Metadata for client uploads (fileId, clientId, fileName, sheets, uploadDate)
-- **ClientConfig**: Per-client preprocessing configuration (column mappings, last updated)
-- **VentasData**: Sales transactions (product codes, quantities, prices, dates, stores, categories)
-- **ProductosData**: Purchase/inventory data (products, quantities ordered, costs, PVP)
-- **TraspasosData**: Store transfer data (products moved between locations)
-- **ForecastJob**: ML forecast jobs (status, model, predictions, summary statistics)
-- **ForecastPrediction**: Individual product predictions (demand, optimal price, confidence)
-
-**Schema Design Philosophy**:
-- Flexible optional fields to handle varying client data structures
-- Spanish field names preserved (act, codigoUnico, familia, temporada) reflecting domain
-- URL fields for product images (urlImage, urlThumbnail)
-- Boolean flags for store type classification (esOnline)
-
-**Excel Column Mappings (TRUCCO Data)**:
-- **Ventas Sheet** ("ventas 23 24 25"): Artículo→codigoUnico, NombreTPV→tienda, TPV→codigoTienda, Fecha Documento→fechaVenta, Descripción Color→color
-- **Productos Sheet** ("Compra"): Same mappings as ventas for consistency
-- **Traspasos Sheet** ("Traspasos de almacén a tienda"): Artículo→codigoUnico, NombreTpvDestino→tienda, Fecha Documento→fechaEnviado
-- **Filtering**: Excludes rows with cantidad=0, empty tienda, or tiendas in TIENDAS_A_ELIMINAR list
-- **Special Tiendas**: 6 online stores (TRUCCO ONLINE B2C, NAELLE ONLINE B2C, etc.), Naelle stores (contain "NAELLE"), Italia/COIN stores (contain "COIN")
+**Database**: PostgreSQL with Drizzle ORM on Easypanel, using Neon serverless driver with WebSocket support.
+**Storage Strategy**: DatabaseStorage implementation (migrated from in-memory MemStorage Nov 7, 2025) providing permanent data persistence across server restarts.
+**Data Models**: Six production tables - `uploaded_files`, `client_configs`, `ventas_data`, `productos_data`, `traspasos_data`, `forecast_jobs`.
+**Schema Design**: Drizzle ORM tables with flexible optional fields, JSON columns for complex data (sheets, columnMappings, forecast results), Spanish field names preserved, batch inserts (1000/batch) for large datasets.
+**Excel Column Mappings**: Configured for TRUCCO data, mapping specific Spanish headers to internal schema fields across 'ventas', 'Compra', and 'Traspasos de almacén a tienda' sheets. Includes filtering rules and special handling for different store types.
 
 ### Authentication and Authorization
 
-**Current State**: Demo mode with placeholder client identification
-- Client ID passed in upload request body
-- No authentication implemented yet
+**Current State**: Demo mode with client ID passed in the upload request.
+**Architecture Preparation**: Multi-tenant data model with `clientId` foreign keys and session infrastructure ready for future implementation.
 
-**Architecture Preparation**:
-- Multi-tenant data model with clientId foreign keys
-- Session infrastructure ready (connect-pg-simple for future session storage)
-- API endpoints structured to receive authenticated user context
-
-### External Dependencies
+## External Dependencies
 
 **Core Runtime Dependencies**:
-- **React Ecosystem**: react, react-dom, wouter (routing)
-- **State Management**: @tanstack/react-query
-- **UI Components**: @radix-ui/* primitives (20+ components), shadcn/ui patterns
-- **Forms**: react-hook-form, @hookform/resolvers, zod (validation)
-- **Database**: drizzle-orm, drizzle-zod, @neondatabase/serverless
-- **File Processing**: xlsx (Excel parsing), multer (file uploads)
-- **Utilities**: date-fns, clsx, class-variance-authority, tailwind-merge
+- **React Ecosystem**: `react`, `react-dom`, `wouter`
+- **State Management**: `@tanstack/react-query`
+- **UI Components**: `@radix-ui/*`, `shadcn/ui`
+- **Forms & Validation**: `react-hook-form`, `@hookform/resolvers`, `zod`
+- **Database**: `drizzle-orm`, `drizzle-zod`, `@neondatabase/serverless`
+- **File Processing**: `xlsx`, `multer`
+- **Utilities**: `date-fns`, `clsx`, `class-variance-authority`, `tailwind-merge`
 
-**Development Tools**:
-- TypeScript compiler with strict mode
-- Vite for build and HMR
-- ESBuild for server bundling
-- Tailwind CSS + PostCSS
-- Drizzle Kit for migrations
-
-**Planned ML/Analytics Stack** (from migration notes):
-- Python backend services for ML predictions
-- CatBoost for demand forecasting models
-- Integration with current Express API (microservices pattern)
+**Development Tools**: TypeScript, Vite, ESBuild, Tailwind CSS, PostCSS, Drizzle Kit.
 
 **Third-Party Services**:
-- Neon Database (PostgreSQL hosting)
-- Google Fonts (Inter, Geist Mono, DM Sans, Fira Code, Architects Daughter)
+- **Database Hosting**: Neon Database (PostgreSQL)
+- **AI**: OpenAI API (for chatbot with `gpt-4o-mini`)
 
-**Asset Management**:
-- Static assets in `/attached_assets` (legacy Streamlit code, requirements, README)
-- Client assets resolved via Vite alias `@assets`
+**Planned ML/Analytics Stack**: Python backend services for ML predictions (e.g., CatBoost) to integrate with the existing Express API.

@@ -8,8 +8,28 @@ import {
   type TraspasosData,
   type ForecastJob,
   type InsertForecastJob,
+  uploadedFiles,
+  clientConfigs,
+  ventasData,
+  productosData,
+  traspasosData,
+  forecastJobs,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+
+// Helper function to normalize database rows by converting null to undefined
+// and removing technical columns (id, fileId)
+function normalizeRow<T>(row: any, columnsToRemove: string[] = []): T {
+  const normalized: any = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!columnsToRemove.includes(key)) {
+      normalized[key] = value === null ? undefined : value;
+    }
+  }
+  return normalized as T;
+}
 
 export interface IStorage {
   // File uploads
@@ -133,4 +153,178 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// DatabaseStorage implementation using Drizzle ORM with PostgreSQL
+export class DatabaseStorage implements IStorage {
+  // File uploads
+  async saveUploadedFile(file: InsertUploadedFile): Promise<UploadedFile> {
+    const id = randomUUID();
+    const [uploadedFile] = await db
+      .insert(uploadedFiles)
+      .values({ ...file, id })
+      .returning();
+    return normalizeRow<UploadedFile>(uploadedFile);
+  }
+
+  async getUploadedFiles(clientId: string): Promise<UploadedFile[]> {
+    const files = await db
+      .select()
+      .from(uploadedFiles)
+      .where(eq(uploadedFiles.clientId, clientId));
+    return files.map(file => normalizeRow<UploadedFile>(file));
+  }
+
+  async getUploadedFile(id: string): Promise<UploadedFile | undefined> {
+    const [file] = await db
+      .select()
+      .from(uploadedFiles)
+      .where(eq(uploadedFiles.id, id));
+    return file ? normalizeRow<UploadedFile>(file) : undefined;
+  }
+
+  // Client configurations
+  async saveClientConfig(config: InsertClientConfig): Promise<ClientConfig> {
+    const [savedConfig] = await db
+      .insert(clientConfigs)
+      .values(config)
+      .onConflictDoUpdate({
+        target: clientConfigs.clientId,
+        set: {
+          columnMappings: config.columnMappings,
+          lastUpdated: config.lastUpdated,
+        },
+      })
+      .returning();
+    return normalizeRow<ClientConfig>(savedConfig);
+  }
+
+  async getClientConfig(clientId: string): Promise<ClientConfig | undefined> {
+    const [config] = await db
+      .select()
+      .from(clientConfigs)
+      .where(eq(clientConfigs.clientId, clientId));
+    return config ? normalizeRow<ClientConfig>(config) : undefined;
+  }
+
+  // Ventas data
+  async saveVentasData(fileId: string, data: VentasData[]): Promise<void> {
+    if (data.length === 0) return;
+
+    // Delete existing data for this file
+    await db.delete(ventasData).where(eq(ventasData.fileId, fileId));
+
+    // Insert new data in batches
+    const batchSize = 1000;
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map(item => ({
+        id: randomUUID(),
+        fileId,
+        ...item,
+      }));
+      await db.insert(ventasData).values(batch);
+    }
+  }
+
+  async getVentasData(fileId: string): Promise<VentasData[]> {
+    const results = await db
+      .select()
+      .from(ventasData)
+      .where(eq(ventasData.fileId, fileId));
+    
+    return results.map(row => normalizeRow<VentasData>(row, ['id', 'fileId']));
+  }
+
+  // Productos data
+  async saveProductosData(fileId: string, data: ProductosData[]): Promise<void> {
+    if (data.length === 0) return;
+
+    // Delete existing data for this file
+    await db.delete(productosData).where(eq(productosData.fileId, fileId));
+
+    // Insert new data in batches
+    const batchSize = 1000;
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map(item => ({
+        id: randomUUID(),
+        fileId,
+        ...item,
+      }));
+      await db.insert(productosData).values(batch);
+    }
+  }
+
+  async getProductosData(fileId: string): Promise<ProductosData[]> {
+    const results = await db
+      .select()
+      .from(productosData)
+      .where(eq(productosData.fileId, fileId));
+    
+    return results.map(row => normalizeRow<ProductosData>(row, ['id', 'fileId']));
+  }
+
+  // Traspasos data
+  async saveTraspasosData(fileId: string, data: TraspasosData[]): Promise<void> {
+    if (data.length === 0) return;
+
+    // Delete existing data for this file
+    await db.delete(traspasosData).where(eq(traspasosData.fileId, fileId));
+
+    // Insert new data in batches
+    const batchSize = 1000;
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map(item => ({
+        id: randomUUID(),
+        fileId,
+        ...item,
+      }));
+      await db.insert(traspasosData).values(batch);
+    }
+  }
+
+  async getTraspasosData(fileId: string): Promise<TraspasosData[]> {
+    const results = await db
+      .select()
+      .from(traspasosData)
+      .where(eq(traspasosData.fileId, fileId));
+    
+    return results.map(row => normalizeRow<TraspasosData>(row, ['id', 'fileId']));
+  }
+
+  // Forecast jobs
+  async saveForecastJob(job: InsertForecastJob): Promise<ForecastJob> {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    const [forecastJob] = await db
+      .insert(forecastJobs)
+      .values({ ...job, id, createdAt })
+      .returning();
+    return normalizeRow<ForecastJob>(forecastJob);
+  }
+
+  async getForecastJob(id: string): Promise<ForecastJob | undefined> {
+    const [job] = await db
+      .select()
+      .from(forecastJobs)
+      .where(eq(forecastJobs.id, id));
+    return job ? normalizeRow<ForecastJob>(job) : undefined;
+  }
+
+  async getForecastJobsByFileId(fileId: string): Promise<ForecastJob[]> {
+    const jobs = await db
+      .select()
+      .from(forecastJobs)
+      .where(eq(forecastJobs.fileId, fileId));
+    return jobs.map(job => normalizeRow<ForecastJob>(job));
+  }
+
+  async updateForecastJob(id: string, updates: Partial<ForecastJob>): Promise<ForecastJob | undefined> {
+    const [updatedJob] = await db
+      .update(forecastJobs)
+      .set(updates)
+      .where(eq(forecastJobs.id, id))
+      .returning();
+    return updatedJob ? normalizeRow<ForecastJob>(updatedJob) : undefined;
+  }
+}
+
+// Export DatabaseStorage for production use with Easypanel PostgreSQL
+export const storage = new DatabaseStorage();

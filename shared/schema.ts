@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, text, integer, real, boolean, json, timestamp, varchar } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 // Schema for uploaded file metadata
 export const uploadedFileSchema = z.object({
@@ -211,3 +213,85 @@ export const insertForecastJobSchema = forecastJobSchema.omit({ id: true, create
 export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;
 export type InsertClientConfig = z.infer<typeof insertClientConfigSchema>;
 export type InsertForecastJob = z.infer<typeof insertForecastJobSchema>;
+
+// ============================================================================
+// Drizzle ORM Table Definitions for PostgreSQL
+// ============================================================================
+
+export const uploadedFiles = pgTable("uploaded_files", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  clientId: text("client_id").notNull(),
+  fileName: text("file_name").notNull(),
+  uploadDate: text("upload_date").notNull(),
+  sheets: json("sheets").$type<string[]>().notNull(),
+});
+
+export const clientConfigs = pgTable("client_configs", {
+  clientId: text("client_id").primaryKey(),
+  columnMappings: json("column_mappings").$type<Record<string, string>>().notNull(),
+  lastUpdated: text("last_updated").notNull(),
+});
+
+export const ventasData = pgTable("ventas_data", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  fileId: text("file_id").notNull(),
+  act: text("act"),
+  codigoUnico: text("codigo_unico"),
+  cantidad: real("cantidad").notNull(),
+  pvp: real("pvp"),
+  subtotal: real("subtotal").notNull(),
+  fechaVenta: text("fecha_venta"),
+  tienda: text("tienda").notNull(),
+  codigoTienda: text("codigo_tienda"),
+  temporada: text("temporada"),
+  familia: text("familia"),
+  descripcionFamilia: text("descripcion_familia"),
+  talla: text("talla"),
+  color: text("color"),
+  urlImage: text("url_image"),
+  urlThumbnail: text("url_thumbnail"),
+  precioCoste: real("precio_coste"),
+  mes: text("mes"),
+  esOnline: boolean("es_online"),
+});
+
+export const productosData = pgTable("productos_data", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  fileId: text("file_id").notNull(),
+  act: text("act"),
+  codigoUnico: text("codigo_unico"),
+  cantidadPedida: real("cantidad_pedida"),
+  pvp: real("pvp"),
+  precioCoste: real("precio_coste"),
+  urlImage: text("url_image"),
+  familia: text("familia"),
+  talla: text("talla"),
+  color: text("color"),
+  temporada: text("temporada"),
+  fechaAlmacen: text("fecha_almacen"),
+  tema: text("tema"),
+});
+
+export const traspasosData = pgTable("traspasos_data", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  fileId: text("file_id").notNull(),
+  act: text("act"),
+  codigoUnico: text("codigo_unico"),
+  enviado: real("enviado"),
+  tienda: text("tienda"),
+  fechaEnviado: text("fecha_enviado"),
+  urlImage: text("url_image"),
+  talla: text("talla"),
+});
+
+export const forecastJobs = pgTable("forecast_jobs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  fileId: text("file_id").notNull(),
+  clientId: text("client_id").notNull(),
+  model: text("model"),
+  status: text("status").notNull(),
+  createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"),
+  error: text("error"),
+  results: json("results"),
+});
