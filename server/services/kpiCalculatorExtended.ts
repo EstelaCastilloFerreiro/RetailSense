@@ -217,8 +217,10 @@ function calculateRotationMetrics(
     .filter(v => v.fechaVenta && v.codigoUnico && (v.cantidad || 0) > 0)
     .map(v => {
       const fechaVentaDate = v.fechaVenta ? parseDate(v.fechaVenta.toString()) : null;
+      // Normalizar codigoUnico a 10 dígitos (como productos) - slice ACT a Generico
+      const codigoUnicoNormalizado = (v.codigoUnico || '').trim().toUpperCase().slice(0, 10);
       return {
-        codigoUnico: v.codigoUnico || '',
+        codigoUnico: codigoUnicoNormalizado,
         talla: v.talla || '',
         tienda: v.tienda || '',
         fechaVenta: fechaVentaDate,
@@ -239,10 +241,12 @@ function calculateRotationMetrics(
     'W001 DEVOLUCIONES WEB (NO ENVIAR TRASP)'
   ];
   
-  // Crear mapa de productos por código único (sin talla para el merge)
+  // Crear mapa de productos por código único (normalizado a 10 dígitos)
   const productosMap = new Map<string, typeof productosRotacion[0]>();
   productosRotacion.forEach(p => {
-    productosMap.set(p.codigoUnico, p);
+    // Normalizar codigoUnico a 10 dígitos (uppercase + trim + slice) como en ventas
+    const codigoUnicoNormalizado = p.codigoUnico.trim().toUpperCase().slice(0, 10);
+    productosMap.set(codigoUnicoNormalizado, p);
   });
   
   // Merge ventas con productos (por código único)

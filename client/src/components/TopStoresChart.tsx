@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { getColorByIndex } from "@/lib/colors";
+import { ExpandableChart } from "@/components/ui/expandable-chart";
 
 interface TopStoresChartProps {
   fileId: string;
@@ -20,13 +21,16 @@ interface TopStoresChartProps {
     tiendas?: string[];
   };
   showBottom?: boolean;
+  isExpanded?: boolean;
 }
 
-export default function TopStoresChart({ fileId, filters, showBottom = false }: TopStoresChartProps) {
+export default function TopStoresChart({ fileId, filters, showBottom = false, isExpanded = false }: TopStoresChartProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['/api/charts/top-stores', fileId, filters],
     enabled: !!fileId,
   });
+
+  const title = showBottom ? "Top 30 tiendas con menos ventas" : "Top 30 tiendas con más ventas";
 
   if (isLoading) {
     return (
@@ -43,9 +47,7 @@ export default function TopStoresChart({ fileId, filters, showBottom = false }: 
   if (!chartData || chartData.length === 0) {
     return (
       <Card className="p-6">
-        <h3 className="text-lg font-medium mb-4">
-          {showBottom ? "Top 30 tiendas con menos ventas" : "Top 30 tiendas con más ventas"}
-        </h3>
+        <h3 className="text-lg font-medium mb-4">{title}</h3>
         <div className="flex items-center justify-center h-[400px]">
           <p className="text-muted-foreground">No hay datos disponibles</p>
         </div>
@@ -54,46 +56,71 @@ export default function TopStoresChart({ fileId, filters, showBottom = false }: 
   }
 
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-medium mb-4">
-        {showBottom ? "Top 30 tiendas con menos ventas" : "Top 30 tiendas con más ventas"}
-      </h3>
-      <ResponsiveContainer width="100%" height={400}>
-        <BarChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-          <XAxis
-            dataKey="tienda"
-            angle={-45}
-            textAnchor="end"
-            height={120}
-            interval={0}
-            tick={{ fontSize: 10 }}
-          />
-          <YAxis 
-            tick={{ fontSize: 12 }}
-            tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "6px",
-            }}
-            formatter={(value: number, name: string) => {
-              if (name === 'beneficio') return [`${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, 'Beneficio'];
-              if (name === 'unidades') return [value.toLocaleString('es-ES'), 'Unidades'];
-              return [value, name];
-            }}
-          />
-          <Legend />
-          <Bar 
-            dataKey="beneficio" 
-            fill={getColorByIndex(0)} 
-            opacity={0.8}
-            name="Beneficio"
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    </Card>
+    <ExpandableChart title={title} renderChart={(expanded) => {
+      const height = expanded ? 800 : 400;
+      const font = expanded ? 14 : 10;
+      const xHeight = expanded ? 200 : 120;
+      
+      return (
+        <Card className="p-6">
+          <h3 className="text-lg font-medium mb-4">{title}</h3>
+          <ResponsiveContainer width="100%" height={height}>
+            <BarChart data={chartData} layout={expanded ? "horizontal" : "vertical"}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+              {expanded ? (
+                <>
+                  <XAxis 
+                    type="number"
+                    tick={{ fontSize: 14 }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="tienda"
+                    width={250}
+                    tick={{ fontSize: 14 }}
+                    interval={0}
+                  />
+                </>
+              ) : (
+                <>
+                  <XAxis
+                    dataKey="tienda"
+                    angle={-45}
+                    textAnchor="end"
+                    height={xHeight}
+                    interval={0}
+                    tick={{ fontSize: font }}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
+                  />
+                </>
+              )}
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "6px",
+                }}
+                formatter={(value: number, name: string) => {
+                  if (name === 'beneficio') return [`${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, 'Beneficio'];
+                  if (name === 'unidades') return [value.toLocaleString('es-ES'), 'Unidades'];
+                  return [value, name];
+                }}
+              />
+              <Legend />
+              <Bar 
+                dataKey="beneficio" 
+                fill={getColorByIndex(0)} 
+                opacity={0.8}
+                name="Beneficio"
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      );
+    }} />
   );
 }
