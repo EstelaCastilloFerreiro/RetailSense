@@ -272,7 +272,7 @@ export default function Forecasting() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Precisión del Modelo</CardTitle>
+                    <CardTitle className="text-sm font-medium">Precisión (100-MAPE)</CardTitle>
                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -291,6 +291,50 @@ export default function Forecasting() {
                           ? "Aceptable - Usar con precaución"
                           : "Baja - Revisar datos"
                         : "Calculando..."}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">MAE (Error Absoluto)</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        const maeVar = purchasePlan?.variablesUtilizadas?.find((v: string) => v.startsWith('MAE:'));
+                        if (maeVar) {
+                          const mae = parseFloat(maeVar.split(':')[1]);
+                          return mae.toFixed(1);
+                        }
+                        return "N/A";
+                      })()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Unidades de error promedio
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">RMSE (Error Cuadrático)</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {(() => {
+                        const rmseVar = purchasePlan?.variablesUtilizadas?.find((v: string) => v.startsWith('RMSE:'));
+                        if (rmseVar) {
+                          const rmse = parseFloat(rmseVar.split(':')[1]);
+                          return rmse.toFixed(1);
+                        }
+                        return "N/A";
+                      })()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Penaliza errores grandes
                     </p>
                   </CardContent>
                 </Card>
