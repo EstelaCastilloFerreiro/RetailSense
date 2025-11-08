@@ -4,6 +4,7 @@ import MLR from "ml-regression-multivariate-linear";
 import SimpleLinearRegression from "ml-regression-simple-linear";
 import { sampleCorrelation, sampleStandardDeviation, mean } from "simple-statistics";
 import { generateSeasonalForecast, detectLatestSeason, type SeasonType } from "./seasonalForecasting";
+import { generateAdvancedForecast } from "./ensembleForecasting";
 
 /**
  * Forecasting Service con Modelo Predictivo Real de ML
@@ -1358,11 +1359,11 @@ async function processForecast(
       filteredVentas = applyFilters(ventasData, request.filters);
     }
 
-    console.log(`🚀 Iniciando forecasting estacional para fileId: ${request.fileId}`);
+    console.log(`🚀 Iniciando forecasting avanzado con ensemble para fileId: ${request.fileId}`);
 
-    // Usar el nuevo motor de forecasting estacional
+    // Usar el nuevo motor de forecasting avanzado con ensemble inteligente
     const seasonType: SeasonType = request.temporadaTipo === 'PV' ? 'PV' : 'OI';
-    const forecastResult = generateSeasonalForecast(filteredVentas, productosData, seasonType);
+    const forecastResult = generateAdvancedForecast(filteredVentas, productosData, seasonType);
 
     if (!forecastResult) {
       throw new Error("No se pudo generar el forecast. Verifica que haya datos históricos suficientes.");
@@ -1370,7 +1371,8 @@ async function processForecast(
 
     console.log(`✅ Forecast generado para temporada: ${forecastResult.targetSeason}`);
     console.log(`📊 Predicciones: ${forecastResult.predictions.length} productos`);
-    console.log(`📈 MAPE: ${forecastResult.accuracy.mape}%, Coverage: ${forecastResult.accuracy.coverage}%`);
+    console.log(`📈 Precisión - MAPE: ${forecastResult.accuracy.mape}%, MAE: ${forecastResult.accuracy.mae}, RMSE: ${forecastResult.accuracy.rmse}`);
+    console.log(`📈 Cobertura: ${forecastResult.accuracy.coverage}%`);
 
     // Enriquecer predicciones con datos de productos y ventas
     const enrichedPredictions = forecastResult.predictions.map(pred => {
@@ -1418,11 +1420,17 @@ async function processForecast(
     // Generate purchase plan con las predicciones enriquecidas
     const purchasePlan = generatePurchasePlan(enrichedPredictions, filteredVentas, productosData, temporadaObjetivo);
     
-    // Agregar metadata del modelo
-    purchasePlan.modeloUtilizado = "Ensemble (Seasonal Average + Linear Trend + Exponential Smoothing)";
+    // Agregar metadata del modelo avanzado
+    const modelsUsedStr = Object.entries(forecastResult.modelsUsed)
+      .map(([model, count]) => `${model}: ${count}`)
+      .join(', ');
+    
+    purchasePlan.modeloUtilizado = `Advanced Ensemble (${modelsUsedStr})`;
     purchasePlan.precisionModelo = 100 - forecastResult.accuracy.mape; // Precisión = 100 - MAPE
     purchasePlan.variablesUtilizadas = [
       `MAPE: ${forecastResult.accuracy.mape}%`,
+      `MAE: ${forecastResult.accuracy.mae}`,
+      `RMSE: ${forecastResult.accuracy.rmse}`,
       `Cobertura: ${forecastResult.accuracy.coverage}%`,
       `Productos: ${forecastResult.predictions.length}`,
       `Datos históricos: ${forecastResult.dataPoints} registros`,
