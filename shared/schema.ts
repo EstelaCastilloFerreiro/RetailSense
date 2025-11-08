@@ -294,4 +294,8 @@ export const forecastJobs = pgTable("forecast_jobs", {
   completedAt: text("completed_at"),
   error: text("error"),
   results: json("results"),
+  progress: real("progress").default(0), // 0-100 percentage
+  totalProducts: integer("total_products").default(0),
+  processedProducts: integer("processed_products").default(0),
+  estimatedTimeRemaining: integer("estimated_time_remaining"), // in seconds
 });

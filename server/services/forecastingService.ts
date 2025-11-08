@@ -1367,8 +1367,18 @@ async function processForecast(
       console.log(`📊 Ventas después de filtros adicionales: ${filteredVentas.length} registros`);
     }
 
+    // Progress callback to update database in real-time
+    const progressCallback = async (progress: number, processed: number, total: number, estimatedTimeRemaining: number) => {
+      await storage.updateForecastJob(jobId, {
+        progress,
+        totalProducts: total,
+        processedProducts: processed,
+        estimatedTimeRemaining,
+      });
+    };
+
     // Usar el nuevo motor de forecasting avanzado con ensemble inteligente
-    const forecastResult = generateAdvancedForecast(filteredVentas, productosData, seasonType);
+    const forecastResult = generateAdvancedForecast(filteredVentas, productosData, seasonType, progressCallback);
 
     if (!forecastResult) {
       throw new Error("No se pudo generar el forecast. Verifica que haya datos históricos suficientes.");

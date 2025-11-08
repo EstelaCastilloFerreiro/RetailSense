@@ -556,17 +556,68 @@ export default function Forecasting() {
               ) : latestJob?.status === "running" ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Generando Plan de Compras</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      Generando Plan de Compras
+                    </CardTitle>
                     <CardDescription>
                       El sistema está analizando los datos y generando predicciones...
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center py-12">
-                      <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
-                      <p className="text-muted-foreground">
-                        Procesando datos y optimizando el modelo...
-                      </p>
+                    <div className="space-y-6">
+                      {/* Progress Bar */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Progreso</span>
+                          <span className="font-mono font-medium">
+                            {latestJob.progress ? `${Math.round(latestJob.progress)}%` : '0%'}
+                          </span>
+                        </div>
+                        <div className="w-full bg-secondary rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className="bg-primary h-full transition-all duration-500 ease-out"
+                            style={{ width: `${latestJob.progress || 0}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-3 gap-4 pt-2">
+                        <div className="text-center p-4 bg-muted/50 rounded-lg">
+                          <div className="text-2xl font-bold font-mono">
+                            {latestJob.processedProducts || 0}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Productos procesados
+                          </div>
+                        </div>
+                        <div className="text-center p-4 bg-muted/50 rounded-lg">
+                          <div className="text-2xl font-bold font-mono">
+                            {latestJob.totalProducts || 0}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Total productos
+                          </div>
+                        </div>
+                        <div className="text-center p-4 bg-muted/50 rounded-lg">
+                          <div className="text-2xl font-bold font-mono text-primary">
+                            {latestJob.estimatedTimeRemaining 
+                              ? `${latestJob.estimatedTimeRemaining}s` 
+                              : '---'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Tiempo estimado
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Processing Message */}
+                      <div className="text-center pt-4">
+                        <p className="text-sm text-muted-foreground">
+                          Analizando datos históricos, calculando tendencias y optimizando predicciones...
+                        </p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

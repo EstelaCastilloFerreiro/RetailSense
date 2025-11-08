@@ -300,7 +300,8 @@ function ensembleForecast(
 export function generateAdvancedForecast(
   ventas: VentasData[],
   productos: ProductosData[],
-  seasonType: SeasonType
+  seasonType: SeasonType,
+  progressCallback?: (progress: number, processed: number, total: number, estimatedTimeRemaining: number) => void
 ): ForecastResult | null {
   console.log('\n🚀 Iniciando Advanced Forecasting con Ensemble Inteligente...');
   
@@ -347,9 +348,17 @@ export function generateAdvancedForecast(
   
   console.log('\n📈 Generando predicciones con ensemble inteligente...');
   
+  // Progress tracking
+  const totalProducts = productData.size;
+  let processedProducts = 0;
+  const startTime = Date.now();
+  
   productData.forEach((data, codigoUnico) => {
     // Filtro: solo productos con ventas significativas
-    if (data.totalSales < 5) return;
+    if (data.totalSales < 5) {
+      processedProducts++;
+      return;
+    }
     
     const forecast = ensembleForecast(
       data.salesByYear,
@@ -379,6 +388,22 @@ export function generateAdvancedForecast(
     totalMAE += forecast.validation.mae;
     totalRMSE += forecast.validation.rmse;
     metricsCount++;
+    
+    // Update progress every 10 products
+    processedProducts++;
+    if (processedProducts % 10 === 0 || processedProducts === totalProducts) {
+      const progress = (processedProducts / totalProducts) * 100;
+      const elapsed = (Date.now() - startTime) / 1000; // seconds
+      const avgTimePerProduct = elapsed / processedProducts;
+      const remainingProducts = totalProducts - processedProducts;
+      const estimatedTimeRemaining = Math.ceil(remainingProducts * avgTimePerProduct);
+      
+      if (progressCallback) {
+        progressCallback(progress, processedProducts, totalProducts, estimatedTimeRemaining);
+      }
+      
+      console.log(`⏳ Progreso: ${processedProducts}/${totalProducts} productos (${progress.toFixed(1)}%) - ${estimatedTimeRemaining}s restantes`);
+    }
   });
   
   // 6. Calcular métricas globales
