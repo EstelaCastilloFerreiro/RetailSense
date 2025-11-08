@@ -30,6 +30,8 @@ interface ModelPrediction {
     rmse: number;
   };
   weight: number;
+  r2?: number;
+  trend?: 'growing' | 'stable' | 'declining';
 }
 
 /**
@@ -71,6 +73,7 @@ function evaluateAllModels(
       method: 'weighted_moving_average',
       validation: wmaValidation,
       weight: 0,
+      trend: wmaResult.trend,
     },
     {
       prediction: lrResult.prediction,
@@ -78,6 +81,7 @@ function evaluateAllModels(
       method: 'linear_regression',
       validation: lrValidation,
       weight: 0,
+      r2: lrResult.r2,
     },
     {
       prediction: hwResult.prediction,
@@ -95,16 +99,20 @@ function evaluateAllModels(
     },
   ];
   
-  // Calcular pesos basados en precisión histórica (1/MAPE)
+  // Calcular pesos basados en precisión histórica (1/(MAPE + epsilon))
+  // Epsilon pequeño previene división por cero para modelos perfectos (MAPE = 0)
+  const EPSILON = 0.01; // 0.01% de error mínimo
   const totalInverseMAPE = models.reduce((sum, m) => {
-    const inverseMAPE = m.validation.mape > 0 ? 1 / m.validation.mape : 0;
+    const adjustedMAPE = Math.max(m.validation.mape, EPSILON);
+    const inverseMAPE = 1 / adjustedMAPE;
     return sum + inverseMAPE;
   }, 0);
   
   // Asignar pesos normalizados
   models.forEach(m => {
     if (totalInverseMAPE > 0) {
-      const inverseMAPE = m.validation.mape > 0 ? 1 / m.validation.mape : 0;
+      const adjustedMAPE = Math.max(m.validation.mape, EPSILON);
+      const inverseMAPE = 1 / adjustedMAPE;
       m.weight = inverseMAPE / totalInverseMAPE;
     } else {
       // Fallback: pesos iguales
@@ -172,6 +180,14 @@ function ensembleForecast(
   // Extraer features del producto
   const features = extractProductFeatures(ventas, productos, codigoUnico);
   
+  // Extraer R² del modelo de regresión lineal si está disponible
+  const lrModel = modelPredictions.find(m => m.method === 'linear_regression');
+  const trendScore = lrModel?.r2;
+  
+  // Extraer tendencia del modelo WMA si está disponible
+  const wmaModel = modelPredictions.find(m => m.method === 'weighted_moving_average');
+  const trend = wmaModel?.trend;
+  
   // Calcular elasticidad precio si hay datos de precio
   const salesWithPrice = new Map<number, { quantity: number; avgPrice: number }>();
   years.forEach(year => {
@@ -210,7 +226,8 @@ function ensembleForecast(
     features: {
       avgPrice: features.avgPrice,
       priceElasticity,
-      trendScore: bestModel.method === 'linear_regression' ? (bestModel as any).r2 : undefined,
+      trendScore,
+      seasonality: trend,
     },
     bestModel: bestModel.method,
   };
