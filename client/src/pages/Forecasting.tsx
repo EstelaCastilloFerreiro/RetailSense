@@ -61,7 +61,7 @@ export default function Forecasting() {
       type: 'PV' | 'OI';
     }>;
   }>({
-    queryKey: fileId ? [`/api/forecast/available-seasons/${fileId}`] : [],
+    queryKey: ['/api/forecast/available-seasons', fileId],
     enabled: !!fileId,
   });
 
