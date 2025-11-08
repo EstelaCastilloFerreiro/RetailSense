@@ -650,16 +650,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/forecast/available-seasons/:fileId", async (req, res) => {
     try {
       const { fileId } = req.params;
-      const ventas = await storage.getVentasData(fileId);
+      
+      // Optimización: Obtener solo temporadas únicas en lugar de todas las ventas
+      const uniqueSeasons = await storage.getUniqueSeasons(fileId);
 
-      if (!ventas || ventas.length === 0) {
+      if (!uniqueSeasons || uniqueSeasons.length === 0) {
         return res.status(404).json({ 
           error: "No sales data found for this file" 
         });
       }
 
+      // Crear objetos mock de VentasData con solo el campo temporada para detectLatestSeason
+      const mockVentas = uniqueSeasons.map(t => ({ temporada: t } as any));
+      
       // Detectar última temporada disponible
-      const latestSeason = detectLatestSeason(ventas);
+      const latestSeason = detectLatestSeason(mockVentas);
 
       if (!latestSeason) {
         return res.status(404).json({ 

@@ -44,6 +44,7 @@ export interface IStorage {
   // Data storage
   saveVentasData(fileId: string, data: VentasData[]): Promise<void>;
   getVentasData(fileId: string): Promise<VentasData[]>;
+  getUniqueSeasons(fileId: string): Promise<string[]>;
   
   saveProductosData(fileId: string, data: ProductosData[]): Promise<void>;
   getProductosData(fileId: string): Promise<ProductosData[]>;
@@ -107,6 +108,15 @@ export class MemStorage implements IStorage {
 
   async getVentasData(fileId: string): Promise<VentasData[]> {
     return this.ventasData.get(fileId) || [];
+  }
+
+  async getUniqueSeasons(fileId: string): Promise<string[]> {
+    const ventas = this.ventasData.get(fileId) || [];
+    const seasons = new Set<string>();
+    ventas.forEach(v => {
+      if (v.temporada) seasons.add(v.temporada);
+    });
+    return Array.from(seasons);
   }
 
   async saveProductosData(fileId: string, data: ProductosData[]): Promise<void> {
@@ -231,6 +241,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(ventasData.fileId, fileId));
     
     return results.map(row => normalizeRow<VentasData>(row, ['id', 'fileId']));
+  }
+
+  async getUniqueSeasons(fileId: string): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ temporada: ventasData.temporada })
+      .from(ventasData)
+      .where(eq(ventasData.fileId, fileId));
+    
+    return results
+      .map(r => r.temporada)
+      .filter((t): t is string => t !== null && t !== undefined);
   }
 
   // Productos data

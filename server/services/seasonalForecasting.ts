@@ -29,6 +29,9 @@ export interface ForecastResult {
 
 /**
  * Detecta la última temporada disponible en los datos
+ * Soporta dos formatos:
+ * - Formato estándar: "24PV", "25OI" (año 2 dígitos + PV/OI)
+ * - Formato alternativo: "V2025", "I2026" (V/I + año 4 dígitos)
  */
 export function detectLatestSeason(ventas: VentasData[]): {
   year: number;
@@ -43,15 +46,32 @@ export function detectLatestSeason(ventas: VentasData[]): {
 
   if (temporadas.length === 0) return null;
 
-  // Parsear temporadas (formato: "24PV", "25OI", etc.)
+  // Parsear temporadas - soportar múltiples formatos
   const parsed = temporadas.map(t => {
-    const match = t!.match(/^(\d{2})(PV|OI)$/);
-    if (!match) return null;
-    return {
-      year: parseInt(`20${match[1]}`), // 24 -> 2024
-      season: match[2] as SeasonType,
-      seasonCode: t!,
-    };
+    // Formato 1: "24PV", "25OI" (año 2 dígitos + PV/OI)
+    const match1 = t!.match(/^(\d{2})(PV|OI)$/);
+    if (match1) {
+      return {
+        year: parseInt(`20${match1[1]}`), // 24 -> 2024
+        season: match1[2] as SeasonType,
+        seasonCode: t!,
+      };
+    }
+    
+    // Formato 2: "V2025", "I2026" (V/I + año 4 dígitos)
+    const match2 = t!.match(/^(V|I)(\d{4})$/);
+    if (match2) {
+      const season = match2[1] === 'V' ? 'PV' : 'OI'; // V=Verano=PV, I=Invierno=OI
+      const year = parseInt(match2[2]);
+      const yearShort = year.toString().slice(-2);
+      return {
+        year,
+        season: season as SeasonType,
+        seasonCode: `${yearShort}${season}`, // Normalizar a formato estándar
+      };
+    }
+    
+    return null;
   }).filter(Boolean) as Array<{ year: number; season: SeasonType; seasonCode: string }>;
 
   if (parsed.length === 0) return null;
@@ -68,6 +88,9 @@ export function detectLatestSeason(ventas: VentasData[]): {
 
 /**
  * Filtra ventas por tipo de temporada (solo PV o solo OI de años históricos)
+ * Soporta dos formatos:
+ * - Formato estándar: "24PV", "25OI" (año 2 dígitos + PV/OI)
+ * - Formato alternativo: "V2025", "I2026" (V/I + año 4 dígitos)
  */
 export function filterBySeasonType(
   ventas: VentasData[],
@@ -77,19 +100,37 @@ export function filterBySeasonType(
   return ventas.filter(v => {
     if (!v.temporada) return false;
     
-    const match = v.temporada.match(/^(\d{2})(PV|OI)$/);
-    if (!match) return false;
+    // Intentar formato 1: "24PV", "25OI"
+    const match1 = v.temporada.match(/^(\d{2})(PV|OI)$/);
+    if (match1) {
+      const year = parseInt(`20${match1[1]}`);
+      const season = match1[2] as SeasonType;
+      
+      // Solo incluir ventas de la misma temporada
+      if (season !== seasonType) return false;
+      
+      // Excluir el año que vamos a predecir
+      if (excludeYear && year >= excludeYear) return false;
+      
+      return true;
+    }
     
-    const year = parseInt(`20${match[1]}`);
-    const season = match[2] as SeasonType;
+    // Intentar formato 2: "V2025", "I2026"
+    const match2 = v.temporada.match(/^(V|I)(\d{4})$/);
+    if (match2) {
+      const season = match2[1] === 'V' ? 'PV' : 'OI'; // V=Verano=PV, I=Invierno=OI
+      const year = parseInt(match2[2]);
+      
+      // Solo incluir ventas de la misma temporada
+      if (season !== seasonType) return false;
+      
+      // Excluir el año que vamos a predecir
+      if (excludeYear && year >= excludeYear) return false;
+      
+      return true;
+    }
     
-    // Solo incluir ventas de la misma temporada
-    if (season !== seasonType) return false;
-    
-    // Excluir el año que vamos a predecir
-    if (excludeYear && year >= excludeYear) return false;
-    
-    return true;
+    return false;
   });
 }
 
@@ -114,9 +155,20 @@ export function aggregateByProduct(ventas: VentasData[]): Map<string, {
     if (v.descripcionFamilia === 'GR.ART.FICTICIO') return;
     if (!v.codigoUnico || !v.temporada) return;
 
-    const match = v.temporada.match(/^(\d{2})(PV|OI)$/);
-    if (!match) return;
-    const year = parseInt(`20${match[1]}`);
+    // Intentar formato 1: "24PV", "25OI"
+    let year: number | null = null;
+    const match1 = v.temporada.match(/^(\d{2})(PV|OI)$/);
+    if (match1) {
+      year = parseInt(`20${match1[1]}`);
+    } else {
+      // Intentar formato 2: "V2025", "I2026"
+      const match2 = v.temporada.match(/^(V|I)(\d{4})$/);
+      if (match2) {
+        year = parseInt(match2[2]);
+      }
+    }
+    
+    if (!year) return; // No se pudo parsear la temporada
 
     if (!productMap.has(v.codigoUnico)) {
       productMap.set(v.codigoUnico, {
