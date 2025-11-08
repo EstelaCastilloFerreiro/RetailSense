@@ -293,7 +293,7 @@ export function processExcelFile(buffer: Buffer): {
       }
     }
     
-    ventas = ventasRaw
+    const ventasWithData = ventasRaw
       .map((row: any, index: number) => {
         try {
           const mapped = mapRow(row, effectiveMapping);
@@ -335,7 +335,7 @@ export function processExcelFile(buffer: Buffer): {
     const excludedStoresCount = new Map<string, number>();
     let totalBeforeFilter = ventasWithData.length;
     
-    const ventas = ventasWithData.filter((v: VentasData | null): v is VentasData => {
+    ventas = ventasWithData.filter((v: VentasData | null): v is VentasData => {
         // Filter out null rows (errors), empty rows and excluded stores
         // But be more lenient - only require tienda and some data
         if (v === null) return false;
