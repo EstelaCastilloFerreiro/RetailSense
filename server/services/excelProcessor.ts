@@ -329,21 +329,23 @@ export function processExcelFile(buffer: Buffer): {
           console.error(`Error processing ventas row ${index}:`, error);
           return null;
         }
-      })
-      .filter((v: VentasData | null): v is VentasData => {
+      });
+    
+    // Count excluded stores before filtering (for performance logging)
+    const excludedStoresCount = new Map<string, number>();
+    let totalBeforeFilter = ventasWithData.length;
+    
+    const ventas = ventasWithData.filter((v: VentasData | null): v is VentasData => {
         // Filter out null rows (errors), empty rows and excluded stores
         // But be more lenient - only require tienda and some data
         if (v === null) return false;
         if (!v.tienda || v.tienda.trim() === '') {
-          if (v.cantidad > 0 || v.subtotal > 0) {
-            console.warn(`Row filtered: missing tienda but has data. cantidad=${v.cantidad}, subtotal=${v.subtotal}`);
-          }
           return false;
         }
         // Match Streamlit: exclude specific stores (with trim to handle whitespace)
         const tiendaTrimmed = v.tienda.trim();
         if (TIENDAS_A_ELIMINAR.includes(tiendaTrimmed)) {
-          console.log(`🚫 Filtering out excluded store: "${tiendaTrimmed}"`);
+          excludedStoresCount.set(tiendaTrimmed, (excludedStoresCount.get(tiendaTrimmed) || 0) + 1);
           return false;
         }
         // Allow rows even if cantidad is 0, as long as there's a subtotal
@@ -351,8 +353,10 @@ export function processExcelFile(buffer: Buffer): {
         return true;
       });
     
-    console.log(`✅ Processed ${ventas.length} ventas records after filtering`);
-    console.log(`✅ TIENDAS_A_ELIMINAR applied: ${TIENDAS_A_ELIMINAR.join(', ')}`);
+    console.log(`✅ Processed ${ventas.length} ventas records after filtering (${totalBeforeFilter - ventas.length} excluded)`);
+    if (excludedStoresCount.size > 0) {
+      console.log(`📊 Excluded stores summary:`, Object.fromEntries(excludedStoresCount));
+    }
   }
 
   // Process Productos/Compra sheet
