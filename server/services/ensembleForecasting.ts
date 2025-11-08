@@ -35,7 +35,60 @@ interface ModelPrediction {
 }
 
 /**
+ * Validación temporal limitada: valida solo los últimos 2-3 años en lugar de todos
+ * Esto reduce el costo computacional mientras mantiene estabilidad estadística
+ * Basado en feedback arquitectónico: balance entre velocidad y precisión
+ */
+function limitedTemporalValidation(
+  salesByYear: Map<number, number>,
+  forecastFn: (data: Map<number, number>) => { prediction: number }
+): { mape: number; mae: number; rmse: number } {
+  const years = Array.from(salesByYear.keys()).sort();
+  
+  if (years.length < 3) {
+    return { mape: 100, mae: 0, rmse: 0 };
+  }
+  
+  // Validar solo los últimos 2-3 folds (en lugar de todos)
+  // Esto reduce costo de O(n) a O(1) pero mantiene estabilidad
+  const maxFolds = Math.min(3, years.length - 2);
+  const startIndex = Math.max(2, years.length - maxFolds);
+  
+  let totalAPE = 0;
+  let totalAE = 0;
+  let totalSE = 0;
+  let count = 0;
+  
+  for (let i = startIndex; i < years.length; i++) {
+    const trainYears = years.slice(0, i);
+    const testYear = years[i];
+    
+    const trainData = new Map<number, number>();
+    trainYears.forEach(y => trainData.set(y, salesByYear.get(y)!));
+    
+    const { prediction } = forecastFn(trainData);
+    const actual = salesByYear.get(testYear)!;
+    
+    if (actual > 0) {
+      const ape = Math.abs((actual - prediction) / actual) * 100;
+      totalAPE += Math.min(ape, 200);
+      count++;
+    }
+    
+    totalAE += Math.abs(actual - prediction);
+    totalSE += (actual - prediction) ** 2;
+  }
+  
+  return {
+    mape: count > 0 ? totalAPE / count : 100,
+    mae: count > 0 ? totalAE / count : totalAE,
+    rmse: count > 0 ? Math.sqrt(totalSE / count) : 0,
+  };
+}
+
+/**
  * Evalúa todos los modelos con validación temporal y retorna predicciones ponderadas
+ * OPTIMIZADO: Usa validación rápida en lugar de cross-validation completa
  */
 function evaluateAllModels(
   salesByYear: Map<number, number>
@@ -44,28 +97,29 @@ function evaluateAllModels(
   
   // Modelo 1: Weighted Moving Average
   const wmaResult = forecastWeightedMovingAverage(salesByYear);
-  const wmaValidation = temporalCrossValidation(salesByYear, (data) => 
+  const wmaValidation = limitedTemporalValidation(salesByYear, (data) => 
     forecastWeightedMovingAverage(data)
   );
   
   // Modelo 2: Linear Regression
   const lrResult = forecastLinearRegressionValidated(salesByYear);
-  const lrValidation = temporalCrossValidation(salesByYear, (data) => 
+  const lrValidation = limitedTemporalValidation(salesByYear, (data) => 
     forecastLinearRegressionValidated(data)
   );
   
-  // Modelo 3: Holt-Winters
-  const hwResult = forecastHoltWinters(salesByYear);
-  const hwValidation = temporalCrossValidation(salesByYear, (data) => 
+  // Modelo 3: Holt-Winters (solo si hay 4+ años de datos)
+  const hwResult = years.length >= 4 ? forecastHoltWinters(salesByYear) : null;
+  const hwValidation = hwResult ? limitedTemporalValidation(salesByYear, (data) => 
     forecastHoltWinters(data)
-  );
+  ) : null;
   
-  // Modelo 4: Prophet-like
-  const prophetResult = forecastProphetLike(salesByYear);
-  const prophetValidation = temporalCrossValidation(salesByYear, (data) => 
+  // Modelo 4: Prophet-like (solo si hay 4+ años de datos)
+  const prophetResult = years.length >= 4 ? forecastProphetLike(salesByYear) : null;
+  const prophetValidation = prophetResult ? limitedTemporalValidation(salesByYear, (data) => 
     forecastProphetLike(data)
-  );
+  ) : null;
   
+  // Construir array de modelos solo con los que tienen datos
   const models: ModelPrediction[] = [
     {
       prediction: wmaResult.prediction,
@@ -83,21 +137,28 @@ function evaluateAllModels(
       weight: 0,
       r2: lrResult.r2,
     },
-    {
+  ];
+  
+  // Solo agregar modelos complejos si hay suficientes datos
+  if (hwResult && hwValidation) {
+    models.push({
       prediction: hwResult.prediction,
       confidence: hwResult.confidence,
       method: 'holt_winters',
       validation: hwValidation,
       weight: 0,
-    },
-    {
+    });
+  }
+  
+  if (prophetResult && prophetValidation) {
+    models.push({
       prediction: prophetResult.prediction,
       confidence: prophetResult.confidence,
       method: 'prophet_decomposition',
       validation: prophetValidation,
       weight: 0,
-    },
-  ];
+    });
+  }
   
   // Calcular pesos basados en precisión histórica (1/(MAPE + epsilon))
   // Epsilon pequeño previene división por cero para modelos perfectos (MAPE = 0)
