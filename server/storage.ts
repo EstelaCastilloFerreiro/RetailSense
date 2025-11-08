@@ -43,7 +43,7 @@ export interface IStorage {
 
   // Data storage
   saveVentasData(fileId: string, data: VentasData[]): Promise<void>;
-  getVentasData(fileId: string): Promise<VentasData[]>;
+  getVentasData(fileId: string, seasonType?: 'PV' | 'OI'): Promise<VentasData[]>;
   getUniqueSeasons(fileId: string): Promise<string[]>;
   
   saveProductosData(fileId: string, data: ProductosData[]): Promise<void>;
@@ -106,8 +106,30 @@ export class MemStorage implements IStorage {
     this.ventasData.set(fileId, data);
   }
 
-  async getVentasData(fileId: string): Promise<VentasData[]> {
-    return this.ventasData.get(fileId) || [];
+  async getVentasData(fileId: string, seasonType?: 'PV' | 'OI'): Promise<VentasData[]> {
+    const allVentas = this.ventasData.get(fileId) || [];
+    
+    if (!seasonType) {
+      return allVentas;
+    }
+    
+    // Filter by season type
+    return allVentas.filter(v => {
+      if (!v.temporada) return false;
+      
+      // Support format 1: "24PV", "25OI"
+      const match1 = v.temporada.match(/^(\d{2})(PV|OI)$/);
+      if (match1 && match1[2] === seasonType) return true;
+      
+      // Support format 2: "V2025", "I2026"
+      const match2 = v.temporada.match(/^(V|I)(\d{4})$/);
+      if (match2) {
+        const season = match2[1] === 'V' ? 'PV' : 'OI';
+        return season === seasonType;
+      }
+      
+      return false;
+    });
   }
 
   async getUniqueSeasons(fileId: string): Promise<string[]> {
@@ -234,12 +256,38 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getVentasData(fileId: string): Promise<VentasData[]> {
-    const results = await db
+  async getVentasData(fileId: string, seasonType?: 'PV' | 'OI'): Promise<VentasData[]> {
+    let query = db
       .select()
       .from(ventasData)
       .where(eq(ventasData.fileId, fileId));
     
+    // Apply season filter if provided (dramatically reduces data loaded)
+    if (seasonType) {
+      const results = await query;
+      
+      // Filter by season type in memory (DB doesn't have regex)
+      const filtered = results.filter(v => {
+        if (!v.temporada) return false;
+        
+        // Support format 1: "24PV", "25OI"
+        const match1 = v.temporada.match(/^(\d{2})(PV|OI)$/);
+        if (match1 && match1[2] === seasonType) return true;
+        
+        // Support format 2: "V2025", "I2026"
+        const match2 = v.temporada.match(/^(V|I)(\d{4})$/);
+        if (match2) {
+          const season = match2[1] === 'V' ? 'PV' : 'OI';
+          return season === seasonType;
+        }
+        
+        return false;
+      });
+      
+      return filtered.map(row => normalizeRow<VentasData>(row, ['id', 'fileId']));
+    }
+    
+    const results = await query;
     return results.map(row => normalizeRow<VentasData>(row, ['id', 'fileId']));
   }
 

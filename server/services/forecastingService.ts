@@ -1348,21 +1348,26 @@ async function processForecast(
     // Update status to running
     await storage.updateForecastJob(jobId, { status: "running" });
 
-    // Get all data
-    const ventasData = await storage.getVentasData(request.fileId);
+    const seasonType: SeasonType = request.temporadaTipo === 'PV' ? 'PV' : 'OI';
+    
+    console.log(`🚀 Iniciando forecasting avanzado con ensemble para fileId: ${request.fileId}`);
+    console.log(`📅 Filtrando datos solo para temporadas tipo: ${seasonType}`);
+
+    // Get data filtered by season type (PERFORMANCE OPTIMIZATION: only load relevant data)
+    const ventasData = await storage.getVentasData(request.fileId, seasonType);
     const productosData = await storage.getProductosData(request.fileId);
     const traspasosData = await storage.getTraspasosData(request.fileId);
 
-    // Apply filters if provided
+    console.log(`📊 Ventas cargadas (filtradas por ${seasonType}): ${ventasData.length} registros`);
+
+    // Apply additional filters if provided
     let filteredVentas = ventasData;
     if (request.filters) {
       filteredVentas = applyFilters(ventasData, request.filters);
+      console.log(`📊 Ventas después de filtros adicionales: ${filteredVentas.length} registros`);
     }
 
-    console.log(`🚀 Iniciando forecasting avanzado con ensemble para fileId: ${request.fileId}`);
-
     // Usar el nuevo motor de forecasting avanzado con ensemble inteligente
-    const seasonType: SeasonType = request.temporadaTipo === 'PV' ? 'PV' : 'OI';
     const forecastResult = generateAdvancedForecast(filteredVentas, productosData, seasonType);
 
     if (!forecastResult) {
