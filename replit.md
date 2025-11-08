@@ -30,10 +30,10 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Storage Solutions
 
-**Database**: PostgreSQL with Drizzle ORM on Easypanel, using Neon serverless driver with WebSocket support.
-**Storage Strategy**: DatabaseStorage implementation (migrated from in-memory MemStorage Nov 7, 2025) providing permanent data persistence across server restarts.
-**Data Models**: Six production tables - `uploaded_files`, `client_configs`, `ventas_data`, `productos_data`, `traspasos_data`, `forecast_jobs`.
-**Schema Design**: Drizzle ORM tables with flexible optional fields, JSON columns for complex data (sheets, columnMappings, forecast results), Spanish field names preserved, batch inserts (1000/batch) for large datasets.
+**Database**: PostgreSQL 17.6 on Easypanel (external infrastructure), using standard `pg` driver with `drizzle-orm/node-postgres`.
+**Storage Strategy**: DatabaseStorage implementation (migrated from in-memory MemStorage Nov 8, 2025) providing permanent data persistence across server restarts.
+**Data Models**: Six production tables - `uploaded_files`, `client_configs`, `ventas_data`, `productos_data`, `traspasos_data`, `forecast_jobs` with indexes on file_id for performance.
+**Schema Design**: Drizzle ORM tables with flexible optional fields, JSON columns for complex data (sheets, columnMappings, forecast results), Spanish field names preserved, batch inserts (1000/batch) for large datasets, automatic null→undefined conversion via normalizeRow helper.
 **Excel Column Mappings**: Configured for TRUCCO data, mapping specific Spanish headers to internal schema fields across 'ventas', 'Compra', and 'Traspasos de almacén a tienda' sheets. Includes filtering rules and special handling for different store types.
 
 ### Authentication and Authorization
