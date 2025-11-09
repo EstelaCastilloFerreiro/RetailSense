@@ -1406,12 +1406,12 @@ async function processForecast(
         : producto?.pvp || 0;
 
       const costePromedio = ventasProducto.length > 0
-        ? ventasProducto.reduce((sum, v) => sum + (v.coste || 0), 0) / ventasProducto.length
-        : producto?.coste || 0;
+        ? ventasProducto.reduce((sum, v) => sum + (v.precioCoste || 0), 0) / ventasProducto.length
+        : producto?.precioCoste || 0;
 
       const tallaComun = ventasProducto[0]?.talla || producto?.talla || 'UNICA';
       const tiendaComun = ventasProducto[0]?.tienda || 'GENERAL';
-      const descripcionFamilia = producto?.descripcionFamilia || pred.familia;
+      const descripcionFamilia = ventasProducto[0]?.descripcionFamilia || pred.familia;
 
       return {
         codigoUnico: pred.codigoUnico,
