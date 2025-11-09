@@ -1378,7 +1378,7 @@ async function processForecast(
     };
 
     // Usar el nuevo motor de forecasting avanzado con ensemble inteligente
-    const forecastResult = generateAdvancedForecast(filteredVentas, productosData, seasonType, progressCallback);
+    const forecastResult = await generateAdvancedForecast(filteredVentas, productosData, seasonType, progressCallback);
 
     if (!forecastResult) {
       throw new Error("No se pudo generar el forecast. Verifica que haya datos históricos suficientes.");

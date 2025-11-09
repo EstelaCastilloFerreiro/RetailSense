@@ -297,12 +297,12 @@ function ensembleForecast(
 /**
  * Función principal mejorada: Genera forecast con ensemble inteligente
  */
-export function generateAdvancedForecast(
+export async function generateAdvancedForecast(
   ventas: VentasData[],
   productos: ProductosData[],
   seasonType: SeasonType,
-  progressCallback?: (progress: number, processed: number, total: number, estimatedTimeRemaining: number) => void
-): ForecastResult | null {
+  progressCallback?: (progress: number, processed: number, total: number, estimatedTimeRemaining: number) => Promise<void>
+): Promise<ForecastResult | null> {
   console.log('\n🚀 Iniciando Advanced Forecasting con Ensemble Inteligente...');
   
   // 1. Detectar última temporada
@@ -353,11 +353,11 @@ export function generateAdvancedForecast(
   let processedProducts = 0;
   const startTime = Date.now();
   
-  productData.forEach((data, codigoUnico) => {
+  for (const [codigoUnico, data] of Array.from(productData.entries())) {
     // Filtro: solo productos con ventas significativas
     if (data.totalSales < 5) {
       processedProducts++;
-      return;
+      continue;
     }
     
     const forecast = ensembleForecast(
@@ -399,12 +399,12 @@ export function generateAdvancedForecast(
       const estimatedTimeRemaining = Math.ceil(remainingProducts * avgTimePerProduct);
       
       if (progressCallback) {
-        progressCallback(progress, processedProducts, totalProducts, estimatedTimeRemaining);
+        await progressCallback(progress, processedProducts, totalProducts, estimatedTimeRemaining);
       }
       
       console.log(`⏳ Progreso: ${processedProducts}/${totalProducts} productos (${progress.toFixed(1)}%) - ${estimatedTimeRemaining}s restantes`);
     }
-  });
+  }
   
   // 6. Calcular métricas globales
   const avgMAPE = metricsCount > 0 ? totalMAPE / metricsCount : 0;

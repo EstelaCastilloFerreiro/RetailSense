@@ -188,6 +188,10 @@ export const forecastJobSchema = z.object({
     }).optional(),
     purchasePlan: purchasePlanSchema.optional(),
   }).optional(),
+  progress: z.number().optional(), // 0-100 percentage
+  totalProducts: z.number().optional(),
+  processedProducts: z.number().optional(),
+  estimatedTimeRemaining: z.number().optional(), // in seconds
 });
 
 export type ForecastJob = z.infer<typeof forecastJobSchema>;
