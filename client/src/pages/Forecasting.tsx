@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,17 +34,11 @@ export default function Forecasting() {
   const { toast } = useToast();
   const [autoRun, setAutoRun] = useState(false);
   const [selectedTemporada, setSelectedTemporada] = useState<'PV' | 'OI' | null>(null);
-  const previousJobStatusRef = useRef<string | null>(null);
 
   const { data: forecastJobs, isLoading: jobsLoading } = useQuery<any[]>({
     queryKey: ["/api/forecast/jobs", fileId],
     enabled: !!fileId,
-    refetchInterval: (data) => {
-      // Poll every 2 seconds if there's a running job
-      const jobs = Array.isArray(data) ? data : [];
-      const hasRunning = jobs.some((job: any) => job?.status === "running");
-      return hasRunning ? 2000 : false;
-    },
+    refetchInterval: 2000, // Always poll every 2 seconds
   });
 
   // Query para obtener temporadas disponibles
@@ -68,20 +62,6 @@ export default function Forecasting() {
 
   const latestJob = Array.isArray(forecastJobs) && forecastJobs.length > 0 ? forecastJobs[0] : null;
   const purchasePlan = latestJob?.results?.purchasePlan;
-  
-  // Force a final refetch when job transitions from "running" to a terminal state
-  useEffect(() => {
-    const currentStatus = latestJob?.status;
-    const previousStatus = previousJobStatusRef.current;
-    
-    // If job changed from "running" to "completed" or "failed", force a final refetch
-    if (previousStatus === "running" && (currentStatus === "completed" || currentStatus === "failed")) {
-      queryClient.invalidateQueries({ queryKey: ["/api/forecast/jobs", fileId] });
-    }
-    
-    // Update the ref with current status
-    previousJobStatusRef.current = currentStatus || null;
-  }, [latestJob?.status, fileId]);
   
   // Determinar temporada seleccionada desde purchasePlan si existe
   useEffect(() => {
