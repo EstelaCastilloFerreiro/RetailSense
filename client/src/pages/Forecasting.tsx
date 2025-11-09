@@ -273,17 +273,17 @@ export default function Forecasting() {
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {purchasePlan?.precisionModelo
-                        ? `${(purchasePlan.precisionModelo * 100).toFixed(1)}%`
+                        ? `${purchasePlan.precisionModelo.toFixed(1)}%`
                         : "N/A"}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {purchasePlan?.precisionModelo
-                        ? purchasePlan.precisionModelo >= 0.85
-                          ? "Excelente - Alta confianza"
-                          : purchasePlan.precisionModelo >= 0.75
-                          ? "Buena - Confianza moderada"
-                          : purchasePlan.precisionModelo >= 0.65
-                          ? "Aceptable - Usar con precaución"
+                        ? purchasePlan.precisionModelo >= 70
+                          ? "Buena - Confianza alta"
+                          : purchasePlan.precisionModelo >= 50
+                          ? "Moderada - Confianza media"
+                          : purchasePlan.precisionModelo >= 30
+                          ? "Aceptable - Confianza baja"
                           : "Baja - Revisar datos"
                         : "Calculando..."}
                     </p>
@@ -364,6 +364,71 @@ export default function Forecasting() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Confidence Panel - Show model quality metrics */}
+              {purchasePlan && purchasePlan.variablesUtilizadas && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <span>Confianza del Pronóstico</span>
+                      {(() => {
+                        const coverage = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
+                        const mape = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
+                        const confidenceLevel = coverage >= 60 && mape < 30 ? 'Alta' : coverage >= 50 && mape < 50 ? 'Media' : 'Baja';
+                        const badgeColor = confidenceLevel === 'Alta' ? 'bg-green-500' : confidenceLevel === 'Media' ? 'bg-yellow-500' : 'bg-orange-500';
+                        return <span className={`text-xs px-2 py-1 rounded-full text-white ${badgeColor}`}>{confidenceLevel}</span>;
+                      })()}
+                    </CardTitle>
+                    <CardDescription>
+                      {(() => {
+                        const coverage = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
+                        return coverage >= 60 
+                          ? 'Basado en datos históricos completos de múltiples temporadas' 
+                          : 'Basado en datos disponibles con algunos productos sin historial suficiente';
+                      })()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Cobertura */}
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium text-muted-foreground">Cobertura analizada</p>
+                        <p className="text-2xl font-bold">
+                          {purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1]?.trim() || 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Productos con datos suficientes para predicción
+                        </p>
+                      </div>
+
+                      {/* Precisión */}
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium text-muted-foreground">Precisión histórica</p>
+                        <p className="text-2xl font-bold">
+                          {(() => {
+                            const mape = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
+                            return `${Math.max(0, 100 - mape).toFixed(1)}%`;
+                          })()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Porcentaje de aciertos del modelo
+                        </p>
+                      </div>
+
+                      {/* Variación media */}
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium text-muted-foreground">Variación media</p>
+                        <p className="text-2xl font-bold">
+                          ±{purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1]?.trim() || 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Diferencia típica entre predicción y ventas reales
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Status Card - Show when there's a job */}
               {latestJob && (

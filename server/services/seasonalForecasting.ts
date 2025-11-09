@@ -386,8 +386,8 @@ export function generateSeasonalForecast(
   let productCount = 0;
 
   productData.forEach((data, codigoUnico) => {
-    // Solo predecir productos con ventas históricas relevantes
-    if (data.totalSales < 5) return; // Threshold mínimo
+    // Solo predecir productos con ventas históricas relevantes (reducido para mayor cobertura)
+    if (data.totalSales < 2) return; // Threshold mínimo
 
     const forecast = selectBestModel(data.salesByYear);
     const historicalAvg = data.totalSales / data.salesByYear.size;

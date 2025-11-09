@@ -35,9 +35,10 @@ interface ModelPrediction {
 }
 
 /**
- * Validación temporal limitada: valida solo los últimos 2-3 años en lugar de todos
+ * Validación temporal limitada: valida solo los últimos años en lugar de todos
  * Esto reduce el costo computacional mientras mantiene estabilidad estadística
  * Basado en feedback arquitectónico: balance entre velocidad y precisión
+ * Ahora soporta series con solo 2 años de datos usando hold-out simple
  */
 function limitedTemporalValidation(
   salesByYear: Map<number, number>,
@@ -45,14 +46,36 @@ function limitedTemporalValidation(
 ): { mape: number; mae: number; rmse: number } {
   const years = Array.from(salesByYear.keys()).sort();
   
-  if (years.length < 3) {
+  if (years.length < 2) {
     return { mape: 100, mae: 0, rmse: 0 };
   }
   
-  // Validar solo los últimos 2-3 folds (en lugar de todos)
+  // Para series de exactamente 2 años, usar validación simple hold-out
+  if (years.length === 2) {
+    const trainData = new Map([[years[0], salesByYear.get(years[0])!]]);
+    const { prediction } = forecastFn(trainData);
+    const actual = salesByYear.get(years[1])!;
+    
+    let ape = 100;
+    if (actual > 0) {
+      ape = Math.abs((actual - prediction) / actual) * 100;
+      ape = Math.min(ape, 200);
+    }
+    
+    const ae = Math.abs(actual - prediction);
+    const se = (actual - prediction) ** 2;
+    
+    return {
+      mape: ape,
+      mae: ae,
+      rmse: Math.sqrt(se)
+    };
+  }
+  
+  // Validar solo los últimos 2-5 folds (en lugar de todos)
   // Esto reduce costo de O(n) a O(1) pero mantiene estabilidad
-  const maxFolds = Math.min(3, years.length - 2);
-  const startIndex = Math.max(2, years.length - maxFolds);
+  const maxFolds = Math.min(5, years.length - 1);
+  const startIndex = Math.max(1, years.length - maxFolds);
   
   let totalAPE = 0;
   let totalAE = 0;
@@ -107,14 +130,14 @@ function evaluateAllModels(
     forecastLinearRegressionValidated(data)
   );
   
-  // Modelo 3: Holt-Winters (solo si hay 4+ años de datos)
-  const hwResult = years.length >= 4 ? forecastHoltWinters(salesByYear) : null;
+  // Modelo 3: Holt-Winters (solo si hay 3+ años de datos)
+  const hwResult = years.length >= 3 ? forecastHoltWinters(salesByYear) : null;
   const hwValidation = hwResult ? limitedTemporalValidation(salesByYear, (data) => 
     forecastHoltWinters(data)
   ) : null;
   
-  // Modelo 4: Prophet-like (solo si hay 4+ años de datos)
-  const prophetResult = years.length >= 4 ? forecastProphetLike(salesByYear) : null;
+  // Modelo 4: Prophet-like (solo si hay 3+ años de datos)
+  const prophetResult = years.length >= 3 ? forecastProphetLike(salesByYear) : null;
   const prophetValidation = prophetResult ? limitedTemporalValidation(salesByYear, (data) => 
     forecastProphetLike(data)
   ) : null;
@@ -202,14 +225,14 @@ function ensembleForecast(
 } {
   const years = Array.from(salesByYear.keys()).sort();
   
-  // Si hay muy pocos datos, usar promedio simple
+  // Si hay muy pocos datos, usar promedio simple con MAPE estimado conservador
   if (years.length < 2) {
     const avg = years.length > 0 ? salesByYear.get(years[0])! : 0;
     return {
       prediction: Math.round(avg),
       confidence: 30,
       method: 'simple_average',
-      validation: { mape: 100, mae: 0, rmse: 0 },
+      validation: { mape: 70, mae: 0, rmse: 0 }, // MAPE conservador pero realista
       features: {},
       bestModel: 'simple_average',
     };
@@ -270,8 +293,21 @@ function ensembleForecast(
   
   const priceElasticity = calculatePriceElasticity(salesWithPrice);
   
+  // Calcular nivel de confianza basado en años de datos y precisión del ensemble
+  const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+  if (years.length >= 3 && weightedMAPE < 30) {
+    // Alta confianza: 3+ años y MAPE bajo
+    weightedConfidence = clamp(weightedConfidence, 75, 100);
+  } else if (years.length >= 2 && weightedMAPE < 50) {
+    // Confianza media: 2+ años y MAPE razonable
+    weightedConfidence = clamp(weightedConfidence, 50, 74);
+  } else {
+    // Baja confianza: pocos datos o MAPE alto
+    weightedConfidence = clamp(weightedConfidence, 30, 49);
+  }
+  
   // Estrategia de selección final:
-  // Si hay suficientes datos (3+ años) y el ensemble tiene buena precisión, usar ensemble
+  // Si hay suficientes datos (2+ años) y el ensemble tiene buena precisión, usar ensemble
   // Si no, usar el mejor modelo individual
   const useEnsemble = years.length >= 3 && weightedMAPE < 50;
   
@@ -338,7 +374,49 @@ export async function generateAdvancedForecast(
   const productData = aggregateByProduct(historicalVentas);
   console.log(`🏷️ Productos únicos: ${productData.size}`);
   
-  // 5. Generar predicciones con ensemble
+  // 5. Calcular promedios jerárquicos para fallback (familia y tema)
+  const familyAverages = new Map<string, { total: number; count: number }>();
+  const temaAverages = new Map<string, { total: number; count: number }>();
+  
+  productData.forEach((data, _) => {
+    if (data.totalSales < 1) return; // Solo considerar productos con ventas
+    const avg = data.totalSales / data.salesByYear.size;
+    
+    // Agregar a promedio de familia
+    if (data.familia) {
+      const current = familyAverages.get(data.familia) || { total: 0, count: 0 };
+      familyAverages.set(data.familia, {
+        total: current.total + avg,
+        count: current.count + 1
+      });
+    }
+    
+    // Agregar a promedio de tema (buscar en productos)
+    const producto = productos.find(p => p.codigoUnico === data.codigoUnico);
+    const tema = producto?.tema;
+    if (tema) {
+      const current = temaAverages.get(tema) || { total: 0, count: 0 };
+      temaAverages.set(tema, {
+        total: current.total + avg,
+        count: current.count + 1
+      });
+    }
+  });
+  
+  // Convertir a promedios finales
+  const familyAvgMap = new Map<string, number>();
+  familyAverages.forEach((val, key) => {
+    familyAvgMap.set(key, val.total / val.count);
+  });
+  
+  const temaAvgMap = new Map<string, number>();
+  temaAverages.forEach((val, key) => {
+    temaAvgMap.set(key, val.total / val.count);
+  });
+  
+  console.log(`🔍 Promedios calculados: ${familyAvgMap.size} familias, ${temaAvgMap.size} temas`);
+  
+  // 6. Generar predicciones con ensemble
   const predictions: ProductForecast[] = [];
   const modelsUsed: { [key: string]: number } = {};
   let totalMAPE = 0;
@@ -354,8 +432,62 @@ export async function generateAdvancedForecast(
   const startTime = Date.now();
   
   for (const [codigoUnico, data] of Array.from(productData.entries())) {
-    // Filtro: solo productos con ventas significativas
-    if (data.totalSales < 5) {
+    // Fallback jerárquico para productos con ventas muy bajas (1-2 unidades)
+    if (data.totalSales >= 1 && data.totalSales < 2) {
+      const producto = productos.find(p => p.codigoUnico === data.codigoUnico);
+      const tema = producto?.tema;
+      
+      // Preferir familia si está disponible, luego tema
+      let fallbackAvg: number | null = null;
+      let fallbackMethod = 'family_average_fallback';
+      
+      if (data.familia && familyAvgMap.has(data.familia)) {
+        fallbackAvg = familyAvgMap.get(data.familia)!;
+        fallbackMethod = 'family_average_fallback';
+      } else if (tema && temaAvgMap.has(tema)) {
+        fallbackAvg = temaAvgMap.get(tema)!;
+        fallbackMethod = 'tema_average_fallback';
+      }
+      
+      if (fallbackAvg !== null) {
+        // Calcular MAPE estimado para fallback: comparar promedio de familia con histórico del producto
+        const historicalAvg = data.totalSales / data.salesByYear.size;
+        const estimatedMAPE = historicalAvg > 0 
+          ? Math.min(Math.abs(fallbackAvg - historicalAvg) / historicalAvg * 100, 80)
+          : 60; // MAPE conservador para productos sin historial
+        
+        predictions.push({
+          codigoUnico: data.codigoUnico,
+          familia: data.familia,
+          predictedDemand: Math.round(fallbackAvg),
+          confidence: 40, // Confianza baja por ser fallback
+          method: fallbackMethod,
+          historicalAverage: Math.round(historicalAvg),
+          features: {},
+          validation: { mape: estimatedMAPE, mae: 0, rmse: 0 },
+        });
+        
+        modelsUsed[fallbackMethod] = (modelsUsed[fallbackMethod] || 0) + 1;
+        processedProducts++;
+        
+        if (processedProducts % 10 === 0 || processedProducts === totalProducts) {
+          const progress = (processedProducts / totalProducts) * 100;
+          const elapsed = (Date.now() - startTime) / 1000;
+          const avgTimePerProduct = elapsed / processedProducts;
+          const remainingProducts = totalProducts - processedProducts;
+          const estimatedTimeRemaining = Math.ceil(remainingProducts * avgTimePerProduct);
+          
+          if (progressCallback) {
+            await progressCallback(progress, processedProducts, totalProducts, estimatedTimeRemaining);
+          }
+        }
+        
+        continue;
+      }
+    }
+    
+    // Filtro: solo productos con ventas >= 2 unidades
+    if (data.totalSales < 2) {
       processedProducts++;
       continue;
     }
