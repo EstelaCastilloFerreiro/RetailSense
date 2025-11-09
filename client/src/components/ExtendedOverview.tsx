@@ -598,69 +598,6 @@ export default function ExtendedOverview() {
         </VisualizationCard>
       )}
 
-      {/* Pendientes de Entrega */}
-      {data.pendientesEntrega && data.pendientesEntrega.length > 0 ? (
-        <VisualizationCard 
-          title="Pendientes de Entrega"
-          id="pendientes-entrega"
-        >
-          <div className="space-y-4">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Talla</TableHead>
-                    <TableHead className="text-right">Cantidad Pendiente</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.pendientesEntrega.map((item) => (
-                    <TableRow key={item.talla}>
-                      <TableCell className="font-medium">{item.talla}</TableCell>
-                      <TableCell className="text-right font-mono">{formatNumber(item.cantidad)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t">
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Total Pendiente</p>
-                <p className="text-lg font-bold font-mono">
-                  {formatNumber(data.pendientesEntrega.reduce((sum, p) => sum + p.cantidad, 0))}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Tallas Diferentes</p>
-                <p className="text-lg font-bold font-mono">{data.pendientesEntrega.length}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Promedio por Talla</p>
-                <p className="text-lg font-bold font-mono">
-                  {formatNumber(
-                    data.pendientesEntrega.length > 0
-                      ? data.pendientesEntrega.reduce((sum, p) => sum + p.cantidad, 0) / data.pendientesEntrega.length
-                      : 0
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-        </VisualizationCard>
-      ) : (
-        <VisualizationCard 
-          title="Pendientes de Entrega"
-          id="pendientes-entrega"
-        >
-          <div className="text-center p-8 text-muted-foreground">
-            <p className="text-sm">No hay productos pendientes de entrega.</p>
-            <p className="text-xs mt-2">Todos los productos tienen fecha de entrada en almacén asignada.</p>
-          </div>
-        </VisualizationCard>
-      )}
-
-
-
       {/* Cantidad Pedida por Mes y Talla */}
       {data.cantidadPedidaPorMesTalla && data.cantidadPedidaPorMesTalla.length > 0 && (
         <VisualizationCard 

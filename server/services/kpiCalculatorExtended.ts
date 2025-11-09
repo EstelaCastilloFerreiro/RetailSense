@@ -68,12 +68,6 @@ export interface ExtendedDashboardData {
   // Ventas por talla con desglose por temporada (para gráfico apilado)
   ventasPorTallaConTemporada?: Array<Record<string, string | number>>;
   
-  // Pendientes de Entrega (productos sin fechaAlmacen)
-  pendientesEntrega?: Array<{
-    talla: string;
-    cantidad: number;
-  }>;
-  
   // Entradas almacén por tema/temporada
   entradasAlmacenPorTema?: Array<{
     tema: string;
@@ -922,34 +916,6 @@ export function calculateExtendedDashboardData(
     .sort((a, b) => b.ventas - a.ventas);
   }
   
-  // Calcular Pendientes de Entrega (productos sin fechaAlmacen válida)
-  let pendientesEntrega: ExtendedDashboardData['pendientesEntrega'] | undefined;
-  const productosSinFecha = productos.filter(p => {
-    // Productos sin fechaAlmacen válida (undefined, null, o string vacío)
-    const tieneFecha = p.fechaAlmacen && 
-                       String(p.fechaAlmacen).trim() !== '' && 
-                       String(p.fechaAlmacen).trim() !== 'null' &&
-                       String(p.fechaAlmacen).trim() !== 'undefined';
-    return !tieneFecha && p.cantidadPedida && p.cantidadPedida > 0;
-  });
-  
-  console.log(`📦 Pendientes de entrega: ${productosSinFecha.length} productos sin fechaAlmacen de ${productos.length} total`);
-  
-  if (productosSinFecha.length > 0) {
-    const pendientesMap = new Map<string, number>();
-    productosSinFecha.forEach(p => {
-      if (!p.talla || !p.cantidadPedida) return;
-      const tallaClean = String(p.talla).trim();
-      pendientesMap.set(tallaClean, (pendientesMap.get(tallaClean) || 0) + (p.cantidadPedida || 0));
-    });
-    
-    pendientesEntrega = Array.from(pendientesMap.entries())
-      .map(([talla, cantidad]) => ({ talla, cantidad }))
-      .sort((a, b) => a.talla.localeCompare(b.talla));
-    
-    console.log(`✅ Pendientes de entrega calculados: ${pendientesEntrega.length} tallas diferentes`);
-  }
-  
   // Calcular Entradas almacén por tema/temporada
   // Primero necesitamos obtener la familia más común de ventas filtradas
   const familiaActual = ventasReales.length > 0 
@@ -1284,7 +1250,6 @@ export function calculateExtendedDashboardData(
     ventasVsTraspasosPorTienda,
     resumenVentasVsTraspasosTemporada,
     totalesPorTienda,
-    pendientesEntrega,
     entradasAlmacenPorTema,
     comparacionEnviadoVsVentasPorTema,
     analisisTemporal,
