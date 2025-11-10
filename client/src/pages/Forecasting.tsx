@@ -441,7 +441,7 @@ export default function Forecasting() {
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {(() => {
-                        const maeVar = purchasePlan?.variablesUtilizadas?.find((v: string) => v.startsWith('MAE:'));
+                        const maeVar = displayPlan?.variablesUtilizadas?.find((v: string) => v.startsWith('MAE:'));
                         if (maeVar) {
                           const mae = parseFloat(maeVar.split(':')[1]);
                           return mae.toFixed(1);
@@ -463,7 +463,7 @@ export default function Forecasting() {
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {(() => {
-                        const rmseVar = purchasePlan?.variablesUtilizadas?.find((v: string) => v.startsWith('RMSE:'));
+                        const rmseVar = displayPlan?.variablesUtilizadas?.find((v: string) => v.startsWith('RMSE:'));
                         if (rmseVar) {
                           const rmse = parseFloat(rmseVar.split(':')[1]);
                           return rmse.toFixed(1);
@@ -484,7 +484,9 @@ export default function Forecasting() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {purchasePlan?.totalPrendas?.uds
+                      {displayPlan?.totalUnidades
+                        ? formatNumber(displayPlan.totalUnidades)
+                        : displayPlan?.totalPrendas?.uds
                         ? formatNumber(displayPlan.totalPrendas.uds)
                         : "0"}
                     </div>
@@ -499,7 +501,9 @@ export default function Forecasting() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {purchasePlan?.totalPrendas?.coste
+                      {displayPlan?.totalInversion
+                        ? formatCurrency(displayPlan.totalInversion)
+                        : displayPlan?.totalPrendas?.coste
                         ? formatCurrency(displayPlan.totalPrendas.coste)
                         : "€0"}
                     </div>
