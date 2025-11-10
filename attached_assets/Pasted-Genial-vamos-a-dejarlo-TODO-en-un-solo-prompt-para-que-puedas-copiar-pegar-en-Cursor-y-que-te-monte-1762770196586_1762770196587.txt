@@ -1,0 +1,382 @@
+Genial, vamos a dejarlo TODO en un solo prompt para que puedas copiar-pegar en Cursor y que te monte:
+	•	El pipeline de datos
+	•	El modelo con alta precisión (AutoML sencillo)
+	•	La lógica de PV/OI
+	•	La salida tipo “PLAN DE COMPRAS OI26/PV26”
+	•	Y las funciones pensadas para el dashboard de KLOB (lo que ve el usuario)
+
+Primero te lo explico muy rápido en español, y luego te dejo el PROMPT COMPLETO EN INGLÉS listo para Cursor.
+
+⸻
+
+🧠 Resumen en simple (lo que quieres que Cursor construya)
+	1.	Input: el usuario sube un Excel con tus columnas reales (TPV, Nombre TPV, Tema, Cantidad Pedida, Precio Coste, P.V.P., etc.).
+	2.	El backend:
+	•	Limpia y transforma los datos.
+	•	Extrae temporada desde Tema (PV/OI + año).
+	•	Entrena dos modelos distintos:
+	•	UNO para todas las PV
+	•	OTRO para todas las OI
+	•	Para cada temporada prueba varios algoritmos (CatBoost, XGBoost, Prophet), ajusta hiperparámetros y se queda con el que tenga mejor MAPE (más precisión).
+	3.	Frontend:
+	•	Paso 1: el usuario sube el Excel.
+	•	Paso 2: el sistema muestra “última temporada detectada” y un desplegable:
+	•	“Predecir próxima PV (PV XX)”
+	•	“Predecir próxima OI (OI XX)”
+	•	Paso 3: el usuario elige y pulsa “Generar Plan de Compras”.
+	4.	El sistema:
+	•	Usa el modelo correcto (PV u OI).
+	•	Predice UDS por SKU.
+	•	Agrega por SECCIÓN (Línea Producto) y construye la tabla final de PLAN DE COMPRAS con:
+	•	SECCION, % sección, UDS, PVP total, COSTE total, Prof, Opc, PM Cte, PM Vta, Mk, MARKDOWN %, SOBRANTE %, x tienda, x talla.
+	•	Devuelve también:
+	•	MAPE, MAE, RMSE
+	•	Cobertura (%)
+	•	Qué modelo se ha elegido.
+	5.	El usuario ve:
+	•	Arriba: tarjetas KPI con Precisión, Cobertura, Temporada, Modelo.
+	•	Abajo: la tabla PLAN DE COMPRAS OI26/PV26 igual al Excel.
+	•	Opcionalmente: gráficos (barras por sección, etc.).
+
+Ahora vamos al prompt completo 👇
+
+⸻
+
+🧾 PROMPT COMPLETO PARA CURSOR (CÓPIA Y PEGA TAL CUAL)
+
+You are an expert Python + ML engineer. 
+
+Goal: build a high-precision forecasting engine for a retail fashion SaaS app called KLOB. 
+The engine must work with 2 main seasons (PV = Spring–Summer, OI = Autumn–Winter) and generate a final “Plan de Compras” table per season, similar to an OTB buying plan.
+
+-------------------------
+1. INPUT DATA STRUCTURE
+-------------------------
+
+The user uploads an Excel file with at least these columns (Spanish names, keep them as-is):
+
+- TPV
+- Nombre TPV
+- Fecha Presupuesto
+- Fecha Tope
+- Marca
+- Descripción Marca
+- Generico
+- ACT
+- Artículo
+- Modelo Artículo
+- Color
+- Descripción Color
+- Talla
+- Tema
+- Línea Producto
+- Cantidad Pedida
+- Fecha REAL entrada en almacén
+- Precio Coste
+- P.V.P.
+- Importe de Coste
+
+Business meaning (important):
+
+- "Cantidad Pedida" = units ordered/sold. This is the core target for forecasting at SKU level.
+- "Tema" includes season info, like "T_PV25 05 MARFIL_P" or similar. From this we must extract:
+  - season_type ∈ {PV, OI}
+  - season_year (e.g. 2025)
+- "Línea Producto" or another field will be used as "SECCION" in the final Plan de Compras (e.g. FALDAS, PANTALON, JERSEIS, etc.).
+- "Precio Coste" and "P.V.P." are unit cost and unit selling price.
+
+The Excel can contain multiple seasons (PV and OI for different years).
+
+--------------------------------------
+2. OVERALL ML & BUSINESS REQUIREMENTS
+--------------------------------------
+
+We need:
+
+1) A robust data preprocessing pipeline.
+2) Two independent forecasting models:
+   - One trained on all PV seasons (season_type = "PV").
+   - One trained on all OI seasons (season_type = "OI").
+3) For each season type, try multiple algorithms and select the one with the best accuracy (lowest MAPE).
+4) High-precision training:
+   - Use proper time-based splits (no random shuffling).
+   - Use basic hyperparameter tuning.
+   - Compute MAPE, MAE and RMSE.
+5) A prediction function where the USER chooses if they want to predict the next PV or the next OI season, based on the latest data available.
+6) The final business output is NOT just SKU-level units, but an aggregated “PLAN DE COMPRAS” table with the following columns (per section):
+
+- SECCION
+- % seccion (PVP)
+- % contribución (CONTRI.)
+- UDS (total units)
+- PVP (total sales value)
+- COSTE (total cost)
+- Prof (depth)
+- Opc (number of options)
+- PM Cte (average cost)
+- PM Vta (average selling price)
+- Mk (margin / mark-up)
+- MARKDOWN %
+- SOBRANTE %
+- x tienda (units per store)
+- x talla (units per size)
+
+We don't need perfect business formulas, but the logic must be consistent and configurable.
+
+---------------------------------
+3. PROJECT STRUCTURE & MODULES
+---------------------------------
+
+Create a modular structure like:
+
+klob_forecasting/
+│
+├── forecasting_engine.py   # core ML logic
+├── preprocessing.py        # data cleaning and feature engineering
+├── plan_compras.py         # aggregation logic to build the Plan de Compras table
+├── demo_app.py             # small Streamlit or Dash demo showing the UX
+├── models/
+│     ├── model_PV.pkl
+│     └── model_OI.pkl
+└── preprocessors/
+      ├── preprocessor_PV.pkl
+      └── preprocessor_OI.pkl
+
+Use joblib to save/load models and preprocessors.
+
+--------------------------
+4. PREPROCESSING PIPELINE
+--------------------------
+
+Implement functions in preprocessing.py:
+
+- load_excel(path) → returns a clean pandas DataFrame.
+- parse_dates(df):
+  - Convert "Fecha Presupuesto" and "Fecha REAL entrada en almacén" to datetime.
+  - Create derived features: Year, Month.
+- extract_season(df):
+  - From "Tema", extract:
+    - season_type: "PV" or "OI"
+    - season_year: integer (e.g. 2025)
+  - Add columns: "season_type", "season_year".
+- clean_data(df):
+  - Drop columns with >30% missing values.
+  - Fill numeric NaNs with median and categorical with mode.
+- build_features(df):
+  - Input features X should include:
+    - season_year, Month (from dates)
+    - Marca, Artículo, Modelo Artículo, Color, Talla, Línea Producto, Nombre TPV
+    - Precio Coste, P.V.P., Importe de Coste
+  - Target y = Cantidad Pedida.
+  - One-hot encode categorical features (or use CatBoost's native handling).
+  - Return X, y.
+
+Create a scikit-learn Pipeline or similar object for each season_type and save it to:
+
+- preprocessors/preprocessor_PV.pkl
+- preprocessors/preprocessor_OI.pkl
+
+------------------------------
+5. TRAINING WITH HIGH PRECISION
+------------------------------
+
+In forecasting_engine.py:
+
+Implement a function:
+
+train_models_by_season(df: pd.DataFrame) -> dict
+
+Steps:
+
+1) Split the full df into two subsets:
+   - df_pv = df[df["season_type"] == "PV"]
+   - df_oi = df[df["season_type"] == "OI"]
+
+2) For each subset, build time-based train/validation splits:
+   - sort by season_year and Month (and optionally date).
+   - last N months/season as validation (e.g. 1 full season or last 20% of records).
+   - no random shuffling.
+
+3) For each season subset, try at least these algorithms:
+
+   - CatBoostRegressor
+   - XGBoostRegressor
+   - (Optional) LightGBM or a simple Prophet model for time-series by aggregated level.
+
+4) For each algorithm, run a small hyperparameter search (RandomizedSearchCV or GridSearchCV) focusing on:
+   - depth / max_depth
+   - learning_rate
+   - n_estimators
+   - l2_regularization (if available)
+
+5) Evaluate each trained model using:
+   - MAPE (mean_absolute_percentage_error)
+   - MAE
+   - RMSE
+
+6) Select the best model per season_type according to the LOWEST MAPE (primary) and lowest RMSE (secondary).
+
+7) Save:
+   - best_model_PV → models/model_PV.pkl
+   - best_model_OI → models/model_OI.pkl
+
+Return a summary dictionary with metrics for each model and the selected best models.
+
+----------------------------------------
+6. PREDICTION FUNCTION (USER CHOOSES PV/OI)
+----------------------------------------
+
+Create a function:
+
+generate_forecast(df_new: pd.DataFrame, target_season_choice: str) -> dict
+
+Where:
+
+- df_new: newly uploaded dataset with the same structure as the original.
+- target_season_choice: string chosen by the user, one of:
+  - "next_PV"
+  - "next_OI"
+
+Logic:
+
+1) Use df_new to detect the latest season_year available (max season_year).
+2) If target_season_choice == "next_PV":
+   - target_season_type = "PV"
+   - target_season_year = last_season_year + 1
+3) If target_season_choice == "next_OI":
+   - target_season_type = "OI"
+   - target_season_year = last_season_year + 1
+
+4) Load the correct model and preprocessor:
+   - if target_season_type == "PV": load model_PV.pkl + preprocessor_PV.pkl
+   - if target_season_type == "OI": load model_OI.pkl + preprocessor_OI.pkl
+
+5) Apply the preprocessing pipeline to df_new and predict "Cantidad Pedida" for each SKU.
+   - Add a column "Cantidad_Predicha" with the predicted units.
+
+6) Compute prediction coverage:
+   - coverage = (number of rows with a valid prediction) / (total SKUs) * 100
+
+7) Build a DataFrame with at least:
+   - SECCION = Línea Producto (or another column you choose)
+   - Artículo, Modelo Artículo, Color, Talla
+   - Cantidad_Predicha
+   - Precio Coste, P.V.P.
+
+8) Pass that DataFrame to a function in plan_compras.py to build the final Plan de Compras table.
+
+----------------------------------
+7. BUILDING THE "PLAN DE COMPRAS"
+----------------------------------
+
+In plan_compras.py implement:
+
+build_plan_compras(df_pred: pd.DataFrame, num_tiendas: int = 10) -> pd.DataFrame
+
+Where df_pred contains at least:
+
+- SECCION (from Línea Producto)
+- Cantidad_Predicha
+- Precio Coste
+- P.V.P.
+- Talla
+
+Aggregation per SECCION:
+
+For each SECCION:
+
+- UDS = sum(Cantidad_Predicha)
+- PVP = sum(Cantidad_Predicha * P.V.P.)
+- COSTE = sum(Cantidad_Predicha * Precio Coste)
+- Opc = number of distinct products (e.g. distinct Artículo or ACT)
+- PM Cte = COSTE / UDS
+- PM Vta = PVP / UDS
+- Mk = (PVP - COSTE) / COSTE or another margin formula (document it in code).
+- Prof = UDS / Opc (depth per option)
+- % seccion (PVP) = PVP_section / PVP_total
+- % contribución (CONTRI.) = COSTE_section / COSTE_total (or use PVP if you prefer)
+- MARKDOWN % = configurable constant per section (for now, you can set a default like 15% and allow a dict to override).
+- SOBRANTE % = configurable constant per section (e.g., default 8%).
+- x tienda = UDS / num_tiendas
+- x talla = UDS / number_of_distinct_sizes in that section
+
+Return a DataFrame with exactly these columns in this order:
+
+["SECCION", "% seccion", "CONTRI.", "UDS", "PVP", "COSTE",
+ "Prof", "Opc", "PM Cte", "PM Vta", "Mk", "MARKDOWN", "SOBRANTE",
+ "x tienda", "x talla"]
+
+-------------------------------
+8. OUTPUT STRUCTURE FOR DASH/UX
+-------------------------------
+
+The generate_forecast(...) function should finally return a Python dict like:
+
+{
+  "season_label": "OI26",   # or "PV26"
+  "season_type": "OI",
+  "season_year": 2026,
+  "best_model_name": "CatBoost",
+  "metrics": {
+      "MAPE": 0.10,
+      "MAE": 3.2,
+      "RMSE": 4.5,
+      "coverage": 0.85
+  },
+  "plan_compras_df": plan_compras_df  # the aggregated table
+}
+
+This will be used by the frontend.
+
+------------------------------
+9. SIMPLE DEMO APP (WHAT USER SEES)
+------------------------------
+
+In demo_app.py, use Streamlit (simpler) or Dash to create a minimal UX.
+
+What the USER should see:
+
+1) Title: "KLOB – Forecasting & Plan de Compras"
+2) Step 1 – File upload:
+   - A file uploader: "Sube tu Excel histórico"
+   - Once uploaded, show a short summary: number of rows, last season detected.
+3) Step 2 – Choose target season:
+   - Show text: "Última temporada detectada: <season_year> <PV/OI>"
+   - Dropdown:
+     - "Predecir próxima PV"
+     - "Predecir próxima OI"
+   - Button: "Generar Plan de Compras"
+4) Step 3 – Results:
+   - KPI cards (can be simple columns with big numbers):
+     - Temporada: e.g. "OI26"
+     - Precisión (MAPE): show as percentage with color (green if MAPE < 0.15)
+     - Cobertura: show coverage%
+     - Modelo utilizado: e.g. "CatBoost"
+   - Below KPIs, show the Plan de Compras table (plan_compras_df) with sorting and scroll.
+   - Optional: one or two charts:
+     - Bar chart: UDS por SECCION
+     - Bar chart: PVP por SECCION
+
+Make the demo_app.py well commented so it is easy to plug into the real KLOB frontend later.
+
+-------------------------
+10. CODE QUALITY & COMMENTS
+-------------------------
+
+- Use type hints and docstrings for all functions.
+- Add logging statements for each important step (data loading, preprocessing, training, model selection, prediction, plan_compras generation).
+- Handle basic errors gracefully (e.g., missing columns, no PV/OI found, insufficient data).
+- Comment clearly where business rules can be adjusted (e.g., markdown %, sobrante %, depth calculation).
+
+Now generate all the necessary Python modules and functions described above.
+
+
+⸻
+
+Con este prompt:
+	•	Le dices a Cursor qué datos tienes.
+	•	Qué debe hacer el modelo para ser preciso y fiable.
+	•	Qué ve el usuario en KLOB.
+	•	Y cómo construir la tabla final de PLAN DE COMPRAS PV/OI que es tu “target de negocio”.
+
+Si luego quieres, en otro mensaje te ayudo a revisar el código que genere Cursor y lo adaptamos a tu app real (Dash, multitenant, etc.).
