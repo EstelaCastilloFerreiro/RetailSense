@@ -1,0 +1,60 @@
+ Camisas y Top:
+      Predicción modelo: 3844 unidades
+      Promedio histórico: 3885 unidades
+      Ratio: 0.99x Dentro del rango esperado
+   ✅ Jerseis:
+      Predicción modelo: 1092 unidades
+      Promedio histórico: 957 unidades
+      Ratio: 1.14x Dentro del rango esperado
+   ✅ Camisetas:
+      Predicción modelo: 3796 unidades
+      Promedio histórico: 3724 unidades
+      Ratio: 1.02x Dentro del rango esperado
+   ✅ Sweatshirt:
+      Predicción modelo: 4609 unidades
+      Promedio histórico: 4600 unidades
+      Ratio: 1.00x Dentro del rango esperado
+   ✅ Pantalón:
+      Predicción modelo: 4265 unidades
+      Promedio histórico: 4134 unidades
+      Ratio: 1.03x Dentro del rango esperado
+   ✅ Cardigan:
+      Predicción modelo: 715 unidades
+      Promedio histórico: 676 unidades
+      Ratio: 1.06x Dentro del rango esperado
+   ✅ Vestidos:
+      Predicción modelo: 2865 unidades
+      Promedio histórico: 3229 unidades
+      Ratio: 0.89x Dentro del rango esperado
+   ✅ Faldas:
+      Predicción modelo: 288 unidades
+      Promedio histórico: 289 unidades
+      Ratio: 1.00x Dentro del rango esperado
+   ✅ Chaquetas:
+      Predicción modelo: 411 unidades
+      Promedio histórico: 357 unidades
+      Ratio: 1.15x Dentro del rango esperado
+   ✅ BAÑO:
+      Predicción modelo: 624 unidades
+      Promedio histórico: 595 unidades
+      Ratio: 1.05x Dentro del rango esperado
+   ✅ CINTURONES:
+      Predicción modelo: 32 unidades
+      Promedio histórico: 37 unidades
+      Ratio: 0.86x Dentro del rango esperado
+   ✅ BUFANDAS:
+      Predicción modelo: 28 unidades
+      Promedio histórico: 23 unidades
+      Ratio: 1.22x Dentro del rango esperado
+   ✅ CHALES:
+      Predicción modelo: 7 unidades
+      Promedio histórico: 8 unidades
+      Ratio: 0.88x Dentro del rango esperado
+   ✅ Abrigos:
+      Predicción modelo: 6 unidades
+      Promedio histórico: 6 unidades
+      Ratio: 1.00x Dentro del rango esperado
+   ✅ BOLSOS:
+      Predicción modelo: 6 unidades
+      Promedio histórico: 7 unidades
+      Ratio: 0.86x Dentro del rango esperado

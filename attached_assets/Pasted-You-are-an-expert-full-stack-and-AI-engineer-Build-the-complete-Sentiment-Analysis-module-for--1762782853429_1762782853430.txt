@@ -1,0 +1,250 @@
+You are an expert full-stack and AI engineer. 
+Build the complete **Sentiment Analysis module** for a SaaS app called **KLOB**, focused on retail fashion brands.
+
+The goal is to help retail clients understand what customers are saying about their brand on social media and review platforms — and visualize it clearly.
+
+The system must connect to **Google Reviews** and **Instagram**, analyze sentiment and topics, and display results through a clean and visual dashboard.
+
+--------------------------------
+1️⃣ GENERAL REQUIREMENTS
+--------------------------------
+
+Build the entire Sentiment Analysis module with:
+
+- **Connectors** to data sources (Google Reviews + Instagram).
+- **NLP pipeline** for cleaning, sentiment classification, and topic detection.
+- **Storage** (local or database-ready) for all comments.
+- **Dashboard UI** (React, Dash, or Streamlit) with rich, visual charts.
+- **Separation** between Social Media (Instagram) and Reviews (Google).
+- **Interactive filtering** and **KPI cards** at the top.
+
+All the UI and labels should be in **Spanish** (e.g. “Positivo”, “Negativo”, “Social Media”, “Reseñas”, etc.).
+
+--------------------------------
+2️⃣ DATA SOURCES AND STRUCTURE
+--------------------------------
+
+Implement two connectors:
+
+### A. Google Reviews (Google Business Profile API)
+- Fetch fields: 
+  - review text
+  - rating (1–5)
+  - date
+  - reviewer name (optional)
+  - store name or location (if available)
+- Save them with:
+  - `canal`: "google_reviews"
+  - `tipo_fuente`: "reviews"
+
+### B. Instagram API
+- Fetch:
+  - Comments on posts (text, date, post_id)
+  - DMs (if permissions allow) (text, date)
+- Save them with:
+  - `canal`: "instagram"
+  - `tipo_fuente`: "social_media"
+
+### Unified storage format
+
+Each record saved as:
+
+| Field | Example |
+|--------|----------|
+| canal | "instagram" |
+| tipo_fuente | "social_media" |
+| texto | "Me encanta la nueva colección!" |
+| fecha | 2025-10-14 |
+| origen_detalle | post_id or store_name |
+| sentiment | "positivo" |
+| sentiment_score | 0.91 |
+| tema | "producto" |
+
+Store all data in a local database (SQLite) or CSV for now, structured to be replaced by Postgres later.
+
+--------------------------------
+3️⃣ NLP PROCESSING
+--------------------------------
+
+Implement an NLP pipeline using Python (HuggingFace transformers, spaCy, or TextBlob) with these steps:
+
+1. **Text Cleaning**
+   - Remove URLs, mentions (@), hashtags (store as optional tags), emojis, and special characters.
+   - Normalize text to lowercase.
+
+2. **Language Detection**
+   - Focus on Spanish and English.
+   - Translate to Spanish if in English (optional).
+
+3. **Sentiment Classification**
+   - Output one of:
+     - `"positivo"`
+     - `"neutro"`
+     - `"negativo"`
+   - Also return a numeric sentiment score between 0–1.
+
+4. **Topic Classification**
+   - Detect main topic among:
+     - `"producto"`
+     - `"talla"`
+     - `"calidad"`
+     - `"precio"`
+     - `"envio"`
+     - `"tienda"`
+     - `"web"`
+   - Use keyword-based or simple ML classification (BERT fine-tune optional).
+
+5. **Save results**
+   - Append `sentiment`, `sentiment_score`, and `tema` columns to each record.
+   - Persist into `sentiment_data.csv` or DB table `sentiments`.
+
+--------------------------------
+4️⃣ DASHBOARD (WHAT USER SEES)
+--------------------------------
+
+Build a web dashboard (React, Dash, or Streamlit) under the tab **“Sentiment Analysis”** with the following layout:
+
+### A. Header
+- Title: “Sentiment Analysis”
+- Subtitle: “Analiza cómo hablan tus clientes sobre tu marca en redes y reseñas.”
+
+### B. KPI Cards (Top Section)
+Four summary cards at the top:
+1. **Sentimiento global** → e.g. “76% positivo”
+2. **Social Media (Instagram)** → e.g. “68% positivo”
+3. **Reseñas (Google)** → e.g. “82% positivo”
+4. **Comentarios analizados** → total count (e.g. “1.235”)
+
+Color code:
+- Green for positive
+- Grey for neutral
+- Red for negative
+
+### C. Filters (Sidebar or Top Bar)
+- Date range picker
+- Source selector:
+  - “Todos”
+  - “Solo Social Media (Instagram)”
+  - “Solo Reseñas (Google)”
+- Topic selector:
+  - producto, talla, calidad, precio, envio, tienda, web
+Every chart and table updates dynamically when filters change.
+
+--------------------------------
+5️⃣ VISUAL CHARTS (COOL & MODERN)
+--------------------------------
+
+### 1️⃣ Donut / Pie Chart
+- Displays sentiment distribution (positive / neutral / negative)
+- Hover → shows % and count
+- Subtitle: “Distribución del sentimiento”
+
+### 2️⃣ Stacked Bar Chart
+- X = canal (Instagram vs Google)
+- Y = number of comments
+- Bars stacked by sentiment color (green/grey/red)
+- Title: “Comparativa entre canales”
+
+### 3️⃣ Line Chart (Time Series)
+- X = date (day/week)
+- Y = % of positive sentiment (or average sentiment_score)
+- Optional: show negative sentiment line
+- Title: “Evolución del sentimiento”
+
+### 4️⃣ Horizontal Bar Chart by Topic
+- Y = temas (“producto”, “precio”, etc.)
+- X = number of comments (positive or negative)
+- Two toggle options:
+  - “Temas con más comentarios negativos”
+  - “Temas con más comentarios positivos”
+- Title: “Principales temas de conversación”
+
+### 5️⃣ Word Cloud (Optional)
+- Positive words → green
+- Negative words → red
+- Title: “Palabras más mencionadas”
+
+### 6️⃣ Map or Bar Chart by Store (Optional)
+- If Google Reviews include store info, show:
+  - Sentiment per store (color-coded)
+  - Title: “Percepción por tienda”
+
+--------------------------------
+6️⃣ COMMENT TABLE (INTERACTIVE)
+--------------------------------
+
+Below the charts, show a table with columns:
+| fecha | canal | tipo_fuente | tema | sentimiento | texto |
+
+Features:
+- Text truncated with “Ver más”.
+- Clicking on a bar in charts filters the table accordingly.
+- Responsive design (works on desktop/tablet).
+
+--------------------------------
+7️⃣ SEPARATION: SOCIAL MEDIA VS REVIEWS
+--------------------------------
+
+- The user can filter by:
+  - “Todos”
+  - “Solo Social Media (Instagram)”
+  - “Solo Reseñas (Google)”
+- All charts, KPIs, and tables update based on this filter.
+- Colors and labels update dynamically.
+
+--------------------------------
+8️⃣ VISUAL DESIGN STYLE
+--------------------------------
+
+Use a modern SaaS-style visual theme:
+- Background: light beige or off-white (#F7F6F3)
+- Text: dark grey (#2C2C2C)
+- Positive color: green (#6AB04C)
+- Negative color: red (#E17055)
+- Neutral color: grey-blue (#B0BEC5)
+- Rounded cards (border-radius: 16px)
+- Soft shadows
+- Interactivity (hover effects, transitions)
+
+Font: **Poppins** or **Inter**, clean and readable.
+
+--------------------------------
+9️⃣ OUTPUT STRUCTURE
+--------------------------------
+
+Return the dashboard as a functional prototype ready to integrate into the main KLOB app.
+
+Backend returns structured JSON like:
+{
+  "summary": {
+    "global_sentiment": 0.76,
+    "social_media_sentiment": 0.68,
+    "reviews_sentiment": 0.82,
+    "total_comments": 1235
+  },
+  "charts": {
+    "sentiment_distribution": {...},
+    "by_channel": {...},
+    "time_series": {...},
+    "by_topic": {...},
+    "word_cloud": {...}
+  },
+  "comments": [ ... list of analysed comments ... ]
+}
+
+Frontend dynamically renders all charts from this JSON.
+
+--------------------------------
+10️⃣ IMPLEMENTATION NOTES
+--------------------------------
+
+- Write clean, modular code:
+  - `fetch_data.py`: connectors for Google Reviews + Instagram
+  - `nlp_analysis.py`: cleaning + sentiment + topic
+  - `dashboard.py`: layout and charts
+- Document functions with clear docstrings.
+- Include logging.
+- Use comments to explain where to insert real API keys later.
+- Make the system easy to scale (replace dummy data with live API responses later).
+
+Final deliverable: fully functional sentiment analysis module (backend + frontend) with clean design, Spanish labels, and rich data visualisation for the KLOB dashboard.
