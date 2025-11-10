@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Dict
 from forecasting_engine.preprocessing import prepare_data_for_training, load_excel, extract_season, parse_dates, clean_data
-from forecasting_engine.training import train_models_by_season, save_model
+from forecasting_engine.training import train_models_by_season, save_model, load_model_metrics
 from forecasting_engine.prediction import generate_forecast
 from forecasting_engine.plan_compras import build_plan_compras
 
@@ -112,6 +112,10 @@ def predict_workflow(excel_path: str, target_season: str, num_tiendas: int = 10)
         logger.info("Generating forecast...")
         forecast_result = generate_forecast(df, target_season)
         
+        # Load model metrics for the season type
+        season_type = forecast_result['season_type']
+        model_metadata = load_model_metrics(season_type)
+        
         # Build Plan de Compras
         logger.info("Building Plan de Compras...")
         plan_df = build_plan_compras(
@@ -122,16 +126,22 @@ def predict_workflow(excel_path: str, target_season: str, num_tiendas: int = 10)
         # Convert plan to dict for JSON serialization
         plan_dict = plan_df.to_dict('records')
         
-        # Combine results
+        # Combine results with frontend-expected field names
         result = {
             'status': 'success',
-            'season_label': forecast_result['season_label'],
+            # Frontend expected fields
+            'temporada_objetivo': forecast_result['season_label'],
+            'cobertura_productos': forecast_result['coverage'],
+            'modelo_ganador': model_metadata.get('model_name', 'ML'),
+            'mape': model_metadata.get('metrics', {}).get('mape'),
+            'mae': model_metadata.get('metrics', {}).get('mae'),
+            'rmse': model_metadata.get('metrics', {}).get('rmse'),
+            'plan_compras': plan_dict,
+            # Additional useful fields
             'season_type': forecast_result['season_type'],
             'season_year': forecast_result['season_year'],
-            'coverage': forecast_result['coverage'],
             'total_skus': forecast_result['total_skus'],
             'total_predicted_units': forecast_result['total_predicted_units'],
-            'plan_compras': plan_dict,
             'summary': {
                 'total_sections': len(plan_df),
                 'total_uds': int(plan_df['UDS'].sum()),
@@ -143,7 +153,10 @@ def predict_workflow(excel_path: str, target_season: str, num_tiendas: int = 10)
         
         logger.info("\n" + "="*80)
         logger.info("PREDICTION WORKFLOW COMPLETE")
-        logger.info(f"Season: {result['season_label']}")
+        logger.info(f"Season: {result['temporada_objetivo']}")
+        logger.info(f"Model: {result['modelo_ganador']}")
+        logger.info(f"Coverage: {result['cobertura_productos']:.1f}%")
+        logger.info(f"MAPE: {result['mape']:.1f}%" if result['mape'] else "MAPE: N/A")
         logger.info(f"Total Units: {result['summary']['total_uds']:,}")
         logger.info(f"Total PVP: €{result['summary']['total_pvp']:,.2f}")
         logger.info(f"Sections: {result['summary']['total_sections']}")
