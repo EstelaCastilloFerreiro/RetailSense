@@ -8,10 +8,10 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict
-from preprocessing import prepare_data_for_training, load_excel, extract_season, parse_dates, clean_data
-from training import train_models_by_season, save_model
-from prediction import generate_forecast
-from plan_compras import build_plan_compras
+from forecasting_engine.preprocessing import prepare_data_for_training, load_excel, extract_season, parse_dates, clean_data
+from forecasting_engine.training import train_models_by_season, save_model
+from forecasting_engine.prediction import generate_forecast
+from forecasting_engine.plan_compras import build_plan_compras
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
