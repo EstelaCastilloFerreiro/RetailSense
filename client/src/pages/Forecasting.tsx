@@ -80,11 +80,28 @@ export default function Forecasting() {
     totalUnidades: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.UDS || 0), 0) || 0,
     totalInversion: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.COSTE || 0), 0) || 0,
     variablesUtilizadas: [
+      `MAPE:${mlResults.mape?.toFixed(1) || 'N/A'}`,
       `MAE:${mlResults.mae?.toFixed(1) || 'N/A'}`,
       `RMSE:${mlResults.rmse?.toFixed(1) || 'N/A'}`,
       `Cobertura:${mlResults.cobertura_productos?.toFixed(1) || 'N/A'}%`
     ],
-    rows: mlResults.plan_compras || [],
+    rows: mlResults.plan_compras?.map((row: any) => ({
+      seccion: row.SECCION || row.seccion || '',
+      pvpPorcentaje: row['% seccion'] || row.pvpPorcentaje || 0,
+      contribucionPorcentaje: row['CONTRI.'] || row.contribucionPorcentaje || 0,
+      uds: row.UDS || row.uds || 0,
+      pvp: row.PVP || row.pvp || 0,
+      coste: row.COSTE || row.coste || 0,
+      profit: row.Prof || row.profit || 0,
+      opciones: row.Opc || row.opciones || 0,
+      pmCte: row['PM Cte'] || row.pmCte || 0,
+      pmVta: row['PM Vta'] || row.pmVta || 0,
+      mk: row.Mk || row.mk || 0,
+      markdownPorcentaje: row.MARKDOWN || row.markdownPorcentaje || 0,
+      sobranPorcentaje: row.SOBRANTE || row.sobranPorcentaje || 0,
+      porTienda: row['x tienda'] || row.porTienda || 0,
+      porTalla: row['x talla'] || row.porTalla || 0,
+    })) || [],
     cobertura_productos: mlResults.cobertura_productos,
   } : purchasePlan;
   
@@ -635,7 +652,7 @@ export default function Forecasting() {
               )}
 
               {/* Purchase Plan Table */}
-              {purchasePlan ? (
+              {displayPlan && displayPlan.rows && displayPlan.rows.length > 0 ? (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -669,7 +686,7 @@ export default function Forecasting() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {displayPlan.rows.map((row: PurchasePlanRow, idx: number) => (
+                          {displayPlan.rows.map((row: any, idx: number) => (
                             <TableRow key={idx}>
                               <TableCell className="font-medium">{row.seccion}</TableCell>
                               <TableCell className="text-center">
