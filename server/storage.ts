@@ -8,12 +8,15 @@ import {
   type TraspasosData,
   type ForecastJob,
   type InsertForecastJob,
+  type SentimentData,
+  type InsertSentiment,
   uploadedFiles,
   clientConfigs,
   ventasData,
   productosData,
   traspasosData,
   forecastJobs,
+  sentimentsData,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -57,6 +60,16 @@ export interface IStorage {
   getForecastJob(id: string): Promise<ForecastJob | undefined>;
   getForecastJobsByFileId(fileId: string): Promise<ForecastJob[]>;
   updateForecastJob(id: string, updates: Partial<ForecastJob>): Promise<ForecastJob | undefined>;
+  
+  // Sentiment analysis
+  saveSentimentData(data: InsertSentiment[]): Promise<void>;
+  getSentimentData(clientId: string, filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    canal?: string;
+    tema?: string;
+  }): Promise<SentimentData[]>;
+  deleteSentimentData(clientId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -66,6 +79,7 @@ export class MemStorage implements IStorage {
   private productosData: Map<string, ProductosData[]>;
   private traspasosData: Map<string, TraspasosData[]>;
   private forecastJobs: Map<string, ForecastJob>;
+  private sentimentsData: Map<string, SentimentData[]>;
 
   constructor() {
     this.uploadedFiles = new Map();
@@ -74,6 +88,7 @@ export class MemStorage implements IStorage {
     this.productosData = new Map();
     this.traspasosData = new Map();
     this.forecastJobs = new Map();
+    this.sentimentsData = new Map();
   }
 
   async saveUploadedFile(file: InsertUploadedFile): Promise<UploadedFile> {
@@ -182,6 +197,50 @@ export class MemStorage implements IStorage {
     const updatedJob = { ...existingJob, ...updates };
     this.forecastJobs.set(id, updatedJob);
     return updatedJob;
+  }
+
+  async saveSentimentData(data: InsertSentiment[]): Promise<void> {
+    if (data.length === 0) return;
+    
+    const clientId = data[0].clientId;
+    const existing = this.sentimentsData.get(clientId) || [];
+    const newData = data.map(item => ({
+      ...item,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    }));
+    
+    this.sentimentsData.set(clientId, [...existing, ...newData]);
+  }
+
+  async getSentimentData(clientId: string, filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    canal?: string;
+    tema?: string;
+  }): Promise<SentimentData[]> {
+    let data = this.sentimentsData.get(clientId) || [];
+    
+    if (filters) {
+      if (filters.dateFrom) {
+        data = data.filter(d => d.fecha >= filters.dateFrom!);
+      }
+      if (filters.dateTo) {
+        data = data.filter(d => d.fecha <= filters.dateTo!);
+      }
+      if (filters.canal) {
+        data = data.filter(d => d.canal === filters.canal);
+      }
+      if (filters.tema) {
+        data = data.filter(d => d.tema === filters.tema);
+      }
+    }
+    
+    return data;
+  }
+
+  async deleteSentimentData(clientId: string): Promise<void> {
+    this.sentimentsData.delete(clientId);
   }
 }
 
@@ -392,6 +451,57 @@ export class DatabaseStorage implements IStorage {
       .where(eq(forecastJobs.id, id))
       .returning();
     return updatedJob ? normalizeRow<ForecastJob>(updatedJob) : undefined;
+  }
+
+  // Sentiment analysis data
+  async saveSentimentData(data: InsertSentiment[]): Promise<void> {
+    if (data.length === 0) return;
+
+    const batchSize = 1000;
+    for (let i = 0; i < data.length; i += batchSize) {
+      const batch = data.slice(i, i + batchSize).map(item => ({
+        id: randomUUID(),
+        ...item,
+        createdAt: new Date().toISOString(),
+      }));
+      await db.insert(sentimentsData).values(batch);
+    }
+  }
+
+  async getSentimentData(clientId: string, filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    canal?: string;
+    tema?: string;
+  }): Promise<SentimentData[]> {
+    let query = db
+      .select()
+      .from(sentimentsData)
+      .where(eq(sentimentsData.clientId, clientId));
+    
+    const results = await query;
+    
+    let filtered = results;
+    if (filters) {
+      if (filters.dateFrom) {
+        filtered = filtered.filter(d => d.fecha >= filters.dateFrom!);
+      }
+      if (filters.dateTo) {
+        filtered = filtered.filter(d => d.fecha <= filters.dateTo!);
+      }
+      if (filters.canal) {
+        filtered = filtered.filter(d => d.canal === filters.canal);
+      }
+      if (filters.tema) {
+        filtered = filtered.filter(d => d.tema === filters.tema);
+      }
+    }
+    
+    return filtered.map(row => normalizeRow<SentimentData>(row));
+  }
+
+  async deleteSentimentData(clientId: string): Promise<void> {
+    await db.delete(sentimentsData).where(eq(sentimentsData.clientId, clientId));
   }
 }
 

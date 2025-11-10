@@ -218,6 +218,27 @@ export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;
 export type InsertClientConfig = z.infer<typeof insertClientConfigSchema>;
 export type InsertForecastJob = z.infer<typeof insertForecastJobSchema>;
 
+// Schema for sentiment analysis data
+export const sentimentSchema = z.object({
+  id: z.string(),
+  clientId: z.string(),
+  canal: z.enum(["instagram", "google_reviews"]), // Data source
+  tipoFuente: z.enum(["social_media", "reviews"]), // Source type
+  texto: z.string(), // Comment text
+  fecha: z.string(), // Date of comment
+  origenDetalle: z.string().optional(), // post_id for Instagram or store_name for Google
+  sentiment: z.enum(["positivo", "neutro", "negativo"]), // Sentiment classification
+  sentimentScore: z.number(), // 0-1 numeric score
+  tema: z.enum(["producto", "talla", "calidad", "precio", "envio", "tienda", "web"]).optional(), // Topic
+  createdAt: z.string(),
+});
+
+export type SentimentData = z.infer<typeof sentimentSchema>;
+
+export const insertSentimentSchema = sentimentSchema.omit({ id: true, createdAt: true });
+
+export type InsertSentiment = z.infer<typeof insertSentimentSchema>;
+
 // ============================================================================
 // Drizzle ORM Table Definitions for PostgreSQL
 // ============================================================================
@@ -302,4 +323,18 @@ export const forecastJobs = pgTable("forecast_jobs", {
   totalProducts: integer("total_products").default(0),
   processedProducts: integer("processed_products").default(0),
   estimatedTimeRemaining: integer("estimated_time_remaining"), // in seconds
+});
+
+export const sentimentsData = pgTable("sentiments_data", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  clientId: text("client_id").notNull(),
+  canal: text("canal").notNull(), // "instagram" | "google_reviews"
+  tipoFuente: text("tipo_fuente").notNull(), // "social_media" | "reviews"
+  texto: text("texto").notNull(),
+  fecha: text("fecha").notNull(),
+  origenDetalle: text("origen_detalle"),
+  sentiment: text("sentiment").notNull(), // "positivo" | "neutro" | "negativo"
+  sentimentScore: real("sentiment_score").notNull(), // 0-1
+  tema: text("tema"), // "producto" | "talla" | "calidad" | "precio" | "envio" | "tienda" | "web"
+  createdAt: text("created_at").notNull(),
 });

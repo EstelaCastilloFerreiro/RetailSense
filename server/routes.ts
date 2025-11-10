@@ -19,6 +19,9 @@ import { createForecastJob, getForecastJob, getLatestForecastJob } from "./servi
 import { detectLatestSeason } from "./services/seasonalForecasting";
 import { forecastRequestSchema } from "@shared/schema";
 import { executeTrainJob, executePredictJob, TrainJobPayloadSchema, PredictJobPayloadSchema } from "./services/mlJobWorker";
+import { sentimentAnalysisService } from "./services/sentimentAnalysis";
+import { GoogleReviewsConnector, InstagramConnector } from "./services/dataConnectors";
+import type { InsertSentiment } from "@shared/schema";
 import fs from "fs";
 import path from "path";
 
@@ -959,6 +962,235 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: error.message || "Error calculating warehouse entries" 
       });
+    }
+  });
+
+  // ==================== SENTIMENT ANALYSIS ENDPOINTS ====================
+  
+  // Fetch and analyze comments from social media and reviews
+  app.post("/api/sentiment/fetch", async (req, res) => {
+    try {
+      const clientId = req.body.clientId || "demo-client";
+      
+      // Fetch data from connectors
+      const googleConnector = new GoogleReviewsConnector();
+      const instagramConnector = new InstagramConnector();
+      
+      const [googleReviews, instagramComments] = await Promise.all([
+        googleConnector.fetchReviews(),
+        instagramConnector.fetchComments(),
+      ]);
+      
+      const allComments = [
+        ...googleReviews.map(r => ({ ...r, canal: "google_reviews" as const, tipoFuente: "reviews" as const })),
+        ...instagramComments.map(c => ({ ...c, canal: "instagram" as const, tipoFuente: "social_media" as const })),
+      ];
+      
+      // Analyze sentiments
+      const sentimentResults = await sentimentAnalysisService.batchAnalyzeSentiments(
+        allComments.map(c => c.text)
+      );
+      
+      // Prepare data for storage
+      const sentimentsToSave: InsertSentiment[] = allComments.map((comment, index) => ({
+        clientId,
+        canal: comment.canal,
+        tipoFuente: comment.tipoFuente,
+        texto: comment.text,
+        fecha: comment.date,
+        origenDetalle: comment.origenDetalle,
+        sentiment: sentimentResults[index].sentiment,
+        sentimentScore: sentimentResults[index].sentimentScore,
+        tema: sentimentResults[index].tema,
+      }));
+      
+      // Save to database
+      await storage.saveSentimentData(sentimentsToSave);
+      
+      res.json({
+        success: true,
+        message: `Analyzed ${sentimentsToSave.length} comments`,
+        count: sentimentsToSave.length,
+      });
+    } catch (error: any) {
+      console.error("Error fetching and analyzing sentiments:", error);
+      res.status(500).json({ error: error.message || "Error processing sentiments" });
+    }
+  });
+
+  // Get sentiment summary (KPIs)
+  app.get("/api/sentiment/summary/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const { dateFrom, dateTo, canal, tema } = req.query;
+      
+      const sentiments = await storage.getSentimentData(clientId, {
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        canal: canal as string | undefined,
+        tema: tema as string | undefined,
+      });
+      
+      if (sentiments.length === 0) {
+        return res.json({
+          globalSentiment: 0,
+          socialMediaSentiment: 0,
+          reviewsSentiment: 0,
+          totalComments: 0,
+        });
+      }
+      
+      // Calculate global sentiment
+      const totalScore = sentiments.reduce((sum, s) => sum + s.sentimentScore, 0);
+      const globalSentiment = totalScore / sentiments.length;
+      
+      // Calculate by tipo_fuente
+      const socialMedia = sentiments.filter(s => s.tipoFuente === "social_media");
+      const reviews = sentiments.filter(s => s.tipoFuente === "reviews");
+      
+      const socialMediaSentiment = socialMedia.length > 0
+        ? socialMedia.reduce((sum, s) => sum + s.sentimentScore, 0) / socialMedia.length
+        : 0;
+      
+      const reviewsSentiment = reviews.length > 0
+        ? reviews.reduce((sum, s) => sum + s.sentimentScore, 0) / reviews.length
+        : 0;
+      
+      res.json({
+        globalSentiment,
+        socialMediaSentiment,
+        reviewsSentiment,
+        totalComments: sentiments.length,
+      });
+    } catch (error: any) {
+      console.error("Error getting sentiment summary:", error);
+      res.status(500).json({ error: error.message || "Error getting summary" });
+    }
+  });
+
+  // Get charts data
+  app.get("/api/sentiment/charts/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const { dateFrom, dateTo, canal, tema } = req.query;
+      
+      const sentiments = await storage.getSentimentData(clientId, {
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        canal: canal as string | undefined,
+        tema: tema as string | undefined,
+      });
+      
+      // Sentiment distribution
+      const positivo = sentiments.filter(s => s.sentiment === "positivo").length;
+      const neutro = sentiments.filter(s => s.sentiment === "neutro").length;
+      const negativo = sentiments.filter(s => s.sentiment === "negativo").length;
+      
+      const sentimentDistribution = {
+        positivo,
+        neutro,
+        negativo,
+      };
+      
+      // By channel
+      const instagramData = sentiments.filter(s => s.canal === "instagram");
+      const googleData = sentiments.filter(s => s.canal === "google_reviews");
+      
+      const byChannel = {
+        instagram: {
+          positivo: instagramData.filter(s => s.sentiment === "positivo").length,
+          neutro: instagramData.filter(s => s.sentiment === "neutro").length,
+          negativo: instagramData.filter(s => s.sentiment === "negativo").length,
+        },
+        google_reviews: {
+          positivo: googleData.filter(s => s.sentiment === "positivo").length,
+          neutro: googleData.filter(s => s.sentiment === "neutro").length,
+          negativo: googleData.filter(s => s.sentiment === "negativo").length,
+        },
+      };
+      
+      // Time series (group by date)
+      const byDate: Record<string, { positivo: number; negativo: number; total: number }> = {};
+      sentiments.forEach(s => {
+        if (!byDate[s.fecha]) {
+          byDate[s.fecha] = { positivo: 0, negativo: 0, total: 0 };
+        }
+        byDate[s.fecha].total++;
+        if (s.sentiment === "positivo") byDate[s.fecha].positivo++;
+        if (s.sentiment === "negativo") byDate[s.fecha].negativo++;
+      });
+      
+      const timeSeries = Object.entries(byDate).map(([fecha, counts]) => ({
+        fecha,
+        positivoPercent: counts.total > 0 ? (counts.positivo / counts.total) * 100 : 0,
+        negativoPercent: counts.total > 0 ? (counts.negativo / counts.total) * 100 : 0,
+      })).sort((a, b) => a.fecha.localeCompare(b.fecha));
+      
+      // By topic
+      const byTopic: Record<string, { positivo: number; negativo: number; neutro: number }> = {};
+      sentiments.forEach(s => {
+        if (!s.tema) return;
+        if (!byTopic[s.tema]) {
+          byTopic[s.tema] = { positivo: 0, negativo: 0, neutro: 0 };
+        }
+        byTopic[s.tema][s.sentiment]++;
+      });
+      
+      const topicData = Object.entries(byTopic).map(([tema, counts]) => ({
+        tema,
+        ...counts,
+      }));
+      
+      res.json({
+        sentimentDistribution,
+        byChannel,
+        timeSeries,
+        byTopic: topicData,
+      });
+    } catch (error: any) {
+      console.error("Error getting charts data:", error);
+      res.status(500).json({ error: error.message || "Error getting charts data" });
+    }
+  });
+
+  // Get comments list
+  app.get("/api/sentiment/comments/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const { dateFrom, dateTo, canal, tema, limit } = req.query;
+      
+      let sentiments = await storage.getSentimentData(clientId, {
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        canal: canal as string | undefined,
+        tema: tema as string | undefined,
+      });
+      
+      // Sort by date (newest first)
+      sentiments.sort((a, b) => b.fecha.localeCompare(a.fecha));
+      
+      // Apply limit if specified
+      if (limit) {
+        const limitNum = parseInt(limit as string, 10);
+        sentiments = sentiments.slice(0, limitNum);
+      }
+      
+      res.json(sentiments);
+    } catch (error: any) {
+      console.error("Error getting comments:", error);
+      res.status(500).json({ error: error.message || "Error getting comments" });
+    }
+  });
+
+  // Delete all sentiment data for a client (useful for re-fetching)
+  app.delete("/api/sentiment/:clientId", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      await storage.deleteSentimentData(clientId);
+      res.json({ success: true, message: "Sentiment data deleted" });
+    } catch (error: any) {
+      console.error("Error deleting sentiment data:", error);
+      res.status(500).json({ error: error.message || "Error deleting data" });
     }
   });
 
