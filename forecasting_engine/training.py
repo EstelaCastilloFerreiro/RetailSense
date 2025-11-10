@@ -307,19 +307,39 @@ def train_models_by_season(X: pd.DataFrame, y: pd.Series, season_type: str) -> D
 
 
 def save_model(model, season_type: str, model_name: str, 
+               metrics: Dict = None,
                output_dir: str = 'forecasting_engine/models'):
     """
-    Save trained model to disk
+    Save trained model and its metrics to disk
     
     Args:
         model: Trained model
         season_type: 'PV' or 'OI'
         model_name: Name of the model (CatBoost, XGBoost, etc.)
+        metrics: Dict with model metrics (mape, mae, rmse)
         output_dir: Directory to save model
     """
-    file_path = f"{output_dir}/model_{season_type}_{model_name}.pkl"
-    joblib.dump(model, file_path)
-    logger.info(f"Saved model to {file_path}")
+    import json
+    import os
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save model
+    model_path = f"{output_dir}/model_{season_type}_{model_name}.pkl"
+    joblib.dump(model, model_path)
+    logger.info(f"Saved model to {model_path}")
+    
+    # Save metrics if provided
+    if metrics:
+        metrics_data = {
+            'season_type': season_type,
+            'model_name': model_name,
+            'metrics': metrics
+        }
+        metrics_path = f"{output_dir}/metrics_{season_type}.json"
+        with open(metrics_path, 'w') as f:
+            json.dump(metrics_data, f, indent=2)
+        logger.info(f"Saved metrics to {metrics_path}")
 
 
 def load_model(season_type: str, input_dir: str = 'forecasting_engine/models'):
@@ -348,3 +368,34 @@ def load_model(season_type: str, input_dir: str = 'forecasting_engine/models'):
     model = joblib.load(file_path)
     logger.info(f"Loaded model from {file_path}")
     return model
+
+
+def load_model_metrics(season_type: str, input_dir: str = 'forecasting_engine/models') -> Dict:
+    """
+    Load saved model metrics from disk
+    
+    Args:
+        season_type: 'PV' or 'OI'
+        input_dir: Directory containing metrics file
+        
+    Returns:
+        Dict with model metadata and metrics
+    """
+    import json
+    import os
+    
+    metrics_path = f"{input_dir}/metrics_{season_type}.json"
+    
+    if not os.path.exists(metrics_path):
+        logger.warning(f"No metrics file found at {metrics_path}")
+        return {
+            'season_type': season_type,
+            'model_name': 'Unknown',
+            'metrics': {'mape': None, 'mae': None, 'rmse': None}
+        }
+    
+    with open(metrics_path, 'r') as f:
+        data = json.load(f)
+    
+    logger.info(f"Loaded metrics from {metrics_path}")
+    return data

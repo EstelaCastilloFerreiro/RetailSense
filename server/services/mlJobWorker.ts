@@ -85,22 +85,34 @@ async function executePythonScript(
       clearTimeout(timeout);
       
       if (code === 0) {
-        // Success - parse JSON output from last stdout line
+        // Success - parse JSON output from stdout
         try {
           const output = stdout.join('');
-          const lastLine = output.trim().split('\n').pop() || '{}';
-          const jsonMatch = lastLine.match(/\{[\s\S]*\}/);
+          
+          // Find the last complete JSON object in output using regex
+          // This handles multi-line prettified JSON
+          const jsonMatch = output.match(/\{[\s\S]*\}(?![\s\S]*\{)/);
           
           if (jsonMatch) {
-            const data = JSON.parse(jsonMatch[0]);
-            logger.info('Python script executed successfully');
-            resolve({
-              status: 'success',
-              data,
-              logs: stdout,
-            });
+            try {
+              const jsonData = JSON.parse(jsonMatch[0]);
+              logger.info('Python script executed successfully, JSON parsed');
+              resolve({
+                status: 'success',
+                data: jsonData,
+                logs: stdout,
+              });
+            } catch (parseErr) {
+              logger.error('Found JSON-like text but failed to parse:', parseErr);
+              resolve({
+                status: 'error',
+                error: 'Failed to parse Python JSON output',
+                logs: stdout.concat(stderr),
+              });
+            }
           } else {
-            // No JSON output, return raw stdout
+            // No JSON found, return raw stdout
+            logger.warn('No JSON output found in Python stdout');
             resolve({
               status: 'success',
               data: { output },
@@ -108,10 +120,10 @@ async function executePythonScript(
             });
           }
         } catch (err) {
-          logger.error('Failed to parse Python output as JSON:', err);
+          logger.error('Error processing Python output:', err);
           resolve({
             status: 'error',
-            error: 'Failed to parse Python output',
+            error: 'Failed to process Python output',
             logs: stdout.concat(stderr),
           });
         }
