@@ -1,0 +1,9 @@
+{
+  "season_type": "OI",
+  "model_name": "XGBoost",
+  "metrics": {
+    "mape": 3.956431878067838,
+    "mae": 0.4471893310546875,
+    "rmse": 1.299824222271735
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "season_type": "PV",
+  "model_name": "CatBoost",
+  "metrics": {
+    "mape": 10.30416454012138,
+    "mae": 0.5052263211601392,
+    "rmse": 0.9186939411399088
+  }
+}
