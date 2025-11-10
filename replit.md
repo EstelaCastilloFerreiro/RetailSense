@@ -63,8 +63,10 @@ Preferred communication style: Simple, everyday language.
 - **Dependencies**: `pandas`, `scikit-learn`, `catboost`, `xgboost`, `joblib`, `openpyxl`, `numpy`
 - **Modules**: `forecasting_engine/` with `preprocessing.py`, `training.py`, `prediction.py`, `plan_compras.py`, `main.py`
 - **Features**: Season extraction from Tema field, temporal train/test splits, AutoML model selection by MAPE, comprehensive metric reporting (MAPE, MAE, RMSE, product coverage)
-- **Integration**: Secure async job worker (`mlJobWorker.ts`) executing Python CLI with Zod validation, timeout handling, and JSON IPC
+- **Integration**: Secure async job worker (`mlJobWorker.ts`) executing Python CLI with Zod validation, timeout handling, regex-based JSON parsing for multi-line prettified output
+- **Metrics Persistence** (Nov 10, 2025): Model metrics saved alongside trained models in JSON sidecar files (`metrics_{season_type}.json`), loaded during prediction to surface MAPE/MAE/RMSE in frontend
+- **Data Contract Alignment** (Nov 10, 2025): Prediction output fields mapped to frontend expectations (`temporada_objetivo`, `cobertura_productos`, `modelo_ganador`, `mape`, `mae`, `rmse`, `plan_compras`)
 - **API Endpoints**: `/api/ml/train` (train CatBoost/XGBoost models), `/api/ml/predict` (generate Plan de Compras for PV/OI seasons)
-- **UI**: Forecasting page selector between "Predicción Estándar (Ensemble)" and "Predicción Avanzada (CatBoost/XGBoost)"
+- **UI**: Forecasting page selector between "Predicción Estándar (Ensemble)" and "Predicción Avanzada (CatBoost/XGBoost)", displays complete model metrics and performance indicators
 - **Current Capabilities**: ~58-60% product coverage at SKU level (limited by 1-year historical data for most products), better precision at section/family aggregation level. System designed to improve as more historical data accumulates.
 - **Commercial Positioning**: Focus on "99.8% coverage through hierarchical fallbacks", "improving each season with more data", and "actionable section-level insights"
