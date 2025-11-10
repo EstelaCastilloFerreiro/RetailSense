@@ -40,7 +40,7 @@ def train_workflow(excel_path: str) -> Dict:
         
         if len(X_pv) > 0:
             pv_result = train_models_by_season(X_pv, y_pv, 'PV')
-            save_model(pv_result['best_model'], 'PV', pv_result['best_model_name'])
+            save_model(pv_result['best_model'], 'PV', pv_result['best_model_name'], pv_result['metrics'])
             results['PV'] = {
                 'status': 'success',
                 'model': pv_result['best_model_name'],
@@ -62,7 +62,7 @@ def train_workflow(excel_path: str) -> Dict:
         
         if len(X_oi) > 0:
             oi_result = train_models_by_season(X_oi, y_oi, 'OI')
-            save_model(oi_result['best_model'], 'OI', oi_result['best_model_name'])
+            save_model(oi_result['best_model'], 'OI', oi_result['best_model_name'], oi_result['metrics'])
             results['OI'] = {
                 'status': 'success',
                 'model': oi_result['best_model_name'],
