@@ -116,17 +116,37 @@ def generate_forecast(df: pd.DataFrame,
     logger.info(f"Total predicted units: {y_pred.sum():.0f}")
     
     # Select relevant columns for output
+    # Use tiered fallback for section/family grouping
+    # Only accept columns with multiple distinct values for meaningful aggregation
+    section_candidates = ['Familia', 'Línea Producto', 'Nombre TPV']
+    section_column = None
+    for candidate in section_candidates:
+        if candidate in df_pred.columns:
+            num_distinct = df_pred[candidate].nunique(dropna=True)
+            if num_distinct > 1:
+                section_column = candidate
+                logger.info(f"Using '{candidate}' as SECCION for Plan de Compras grouping ({num_distinct} distinct values)")
+                break
+            else:
+                logger.debug(f"Skipping '{candidate}': only {num_distinct} distinct value(s)")
+    
+    if section_column is None:
+        # Fallback to creating a generic section
+        df_pred['SECCION'] = 'Producto'
+        logger.warning("No suitable multi-value section column found, using generic 'Producto' (will result in single-row Plan de Compras)")
+    
     output_columns = [
-        'Línea Producto', 'Artículo', 'Modelo Artículo', 'Color', 'Talla',
+        section_column if section_column else 'SECCION',
+        'Artículo', 'Modelo Artículo', 'Color', 'Talla',
         'Cantidad_Predicha', 'Precio Coste', 'P.V.P.', 'Tema'
     ]
     
     available_columns = [col for col in output_columns if col in df_pred.columns]
     df_output = df_pred[available_columns].copy()
     
-    # Rename for consistency
-    if 'Línea Producto' in df_output.columns:
-        df_output = df_output.rename(columns={'Línea Producto': 'SECCION'})
+    # Rename selected column to SECCION
+    if section_column and section_column in df_output.columns:
+        df_output = df_output.rename(columns={section_column: 'SECCION'})
     
     result = {
         'season_label': target_season_label,
