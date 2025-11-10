@@ -34,6 +34,15 @@ export default function Forecasting() {
   const { toast } = useToast();
   const [autoRun, setAutoRun] = useState(false);
   const [selectedTemporada, setSelectedTemporada] = useState<'PV' | 'OI' | null>(null);
+  const [modelType, setModelType] = useState<'standard' | 'ml'>('standard');
+  const [mlResults, setMlResults] = useState<any>(null);
+
+  // Reset ML results when switching back to standard model
+  useEffect(() => {
+    if (modelType === 'standard' && mlResults) {
+      setMlResults(null);
+    }
+  }, [modelType]);
 
   const { data: forecastJobs, isLoading: jobsLoading } = useQuery<any[]>({
     queryKey: ["/api/forecast/jobs", fileId],
@@ -63,14 +72,30 @@ export default function Forecasting() {
   const latestJob = Array.isArray(forecastJobs) && forecastJobs.length > 0 ? forecastJobs[0] : null;
   const purchasePlan = latestJob?.results?.purchasePlan;
   
-  // Determinar temporada seleccionada desde purchasePlan si existe
+  // Determine which results to display (ML or standard)
+  const displayPlan = mlResults ? {
+    modeloUtilizado: mlResults.modelo_ganador || 'ML',
+    precisionModelo: mlResults.mape ? 100 - mlResults.mape : null,
+    temporadaObjetivo: mlResults.temporada_objetivo || '',
+    totalUnidades: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.UDS || 0), 0) || 0,
+    totalInversion: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.COSTE || 0), 0) || 0,
+    variablesUtilizadas: [
+      `MAE:${mlResults.mae?.toFixed(1) || 'N/A'}`,
+      `RMSE:${mlResults.rmse?.toFixed(1) || 'N/A'}`,
+      `Cobertura:${mlResults.cobertura_productos?.toFixed(1) || 'N/A'}%`
+    ],
+    rows: mlResults.plan_compras || [],
+    cobertura_productos: mlResults.cobertura_productos,
+  } : purchasePlan;
+  
+  // Determinar temporada seleccionada desde displayPlan si existe
   useEffect(() => {
-    if (purchasePlan?.temporadaObjetivo && !selectedTemporada) {
-      const tipo = purchasePlan.temporadaObjetivo.includes('Primavera') ? 'PV' : 'OI';
+    if (displayPlan?.temporadaObjetivo && !selectedTemporada) {
+      const tipo = displayPlan.temporadaObjetivo.includes('Primavera') || displayPlan.temporadaObjetivo.includes('PV') ? 'PV' : 'OI';
       setSelectedTemporada(tipo);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchasePlan?.temporadaObjetivo]);
+  }, [displayPlan?.temporadaObjetivo]);
 
   const runForecastMutation = useMutation({
     mutationFn: async () => {
@@ -102,6 +127,78 @@ export default function Forecasting() {
     },
   });
 
+  // ML Training Mutation
+  const trainMLMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/ml/train`, {
+        method: "POST",
+        body: JSON.stringify({ fileId }),
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to train ML models");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      console.log("ML Training completed:", data);
+      toast({
+        title: "Entrenamiento completado",
+        description: "Modelos ML entrenados correctamente. Generando predicción...",
+      });
+    },
+    onError: (error: any) => {
+      const isTimeout = error.message?.includes('timeout') || error.message?.includes('timed out');
+      toast({
+        title: isTimeout ? "Tiempo de espera excedido" : "Error en entrenamiento ML",
+        description: isTimeout 
+          ? "El entrenamiento tardó más de 10 minutos. Por favor, intente con menos datos o contacte soporte."
+          : error.message || "No se pudieron entrenar los modelos",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ML Prediction Mutation
+  const predictMLMutation = useMutation({
+    mutationFn: async () => {
+      const targetSeason = selectedTemporada === 'PV' ? 'next_PV' : 'next_OI';
+      const response = await fetch(`/api/ml/predict`, {
+        method: "POST",
+        body: JSON.stringify({ 
+          fileId, 
+          targetSeason,
+          numTiendas: 10, // Default number of stores
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate ML prediction");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      console.log("ML Prediction completed:", data);
+      setMlResults(data.forecast);
+      toast({
+        title: "Predicción ML completada",
+        description: `Plan de compras generado con ${data.forecast?.cobertura_productos?.toFixed(1) || 'N/A'}% de cobertura`,
+      });
+    },
+    onError: (error: any) => {
+      const isTimeout = error.message?.includes('timeout') || error.message?.includes('timed out');
+      toast({
+        title: isTimeout ? "Tiempo de espera excedido" : "Error en predicción ML",
+        description: isTimeout 
+          ? "La predicción tardó más de 2 minutos. Por favor, intente nuevamente o contacte soporte."
+          : error.message || "No se pudo generar la predicción",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Auto-run forecast when fileId is available and no job exists
   useEffect(() => {
     if (fileId && !autoRun && (!latestJob || latestJob.status === "failed")) {
@@ -111,8 +208,19 @@ export default function Forecasting() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId, latestJob?.status]);
 
-  const handleRunForecast = () => {
-    runForecastMutation.mutate();
+  const handleRunForecast = async () => {
+    if (modelType === 'ml') {
+      // ML flow: train then predict
+      try {
+        await trainMLMutation.mutateAsync();
+        await predictMLMutation.mutateAsync();
+      } catch (error) {
+        console.error("ML forecast error:", error);
+      }
+    } else {
+      // Standard ensemble forecast
+      runForecastMutation.mutate();
+    }
   };
 
   const formatCurrency = (value: number) => {
@@ -156,8 +264,8 @@ export default function Forecasting() {
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="flex-1 min-w-[250px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                       <label className="text-sm font-medium mb-2 block">Seleccionar Temporada a Predecir</label>
                       <Select 
                         value={selectedTemporada || ""} 
@@ -179,25 +287,59 @@ export default function Forecasting() {
                         El sistema entrena el modelo solo con datos históricos de la misma temporada (PV con PV, OI con OI)
                       </p>
                     </div>
-                    <div className="flex items-end">
-                      <Button
-                        onClick={handleRunForecast}
-                        disabled={runForecastMutation.isPending || latestJob?.status === "running" || !selectedTemporada}
-                        data-testid="button-run-forecast"
+
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Tipo de Modelo</label>
+                      <Select 
+                        value={modelType} 
+                        onValueChange={(value) => setModelType(value as 'standard' | 'ml')}
+                        data-testid="select-model-type"
                       >
-                        {runForecastMutation.isPending || latestJob?.status === "running" ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Procesando...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Generar Predicción
-                          </>
-                        )}
-                      </Button>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="standard">
+                            Predicción Estándar (Ensemble)
+                          </SelectItem>
+                          <SelectItem value="ml">
+                            Predicción Avanzada (CatBoost/XGBoost)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {modelType === 'ml' 
+                          ? 'AutoML con CatBoost y XGBoost. ~60% cobertura SKU (mejora con más datos históricos), alta precisión a nivel sección/familia.'
+                          : 'Modelo ensemble con 4 algoritmos. Rápido y confiable. ~99% cobertura con fallbacks jerárquicos.'}
+                      </p>
                     </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={handleRunForecast}
+                      disabled={
+                        runForecastMutation.isPending || 
+                        trainMLMutation.isPending || 
+                        predictMLMutation.isPending || 
+                        latestJob?.status === "running" || 
+                        !selectedTemporada
+                      }
+                      data-testid="button-run-forecast"
+                      className="min-w-[200px]"
+                    >
+                      {(runForecastMutation.isPending || trainMLMutation.isPending || predictMLMutation.isPending || latestJob?.status === "running") ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          {trainMLMutation.isPending ? 'Entrenando ML...' : predictMLMutation.isPending ? 'Prediciendo...' : 'Procesando...'}
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Generar Predicción
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -257,9 +399,10 @@ export default function Forecasting() {
                         </>
                       )}
                     </div>
-                    {purchasePlan && (
+                    {displayPlan && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Modelo: {purchasePlan.modeloUtilizado.toUpperCase()}
+                        Modelo: {displayPlan.modeloUtilizado.toUpperCase()}
+                        {mlResults && ` (${mlResults.cobertura_productos?.toFixed(1)}% cobertura)`}
                       </p>
                     )}
                   </CardContent>
@@ -272,17 +415,17 @@ export default function Forecasting() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {purchasePlan?.precisionModelo
-                        ? `${purchasePlan.precisionModelo.toFixed(1)}%`
+                      {displayPlan?.precisionModelo
+                        ? `${displayPlan.precisionModelo.toFixed(1)}%`
                         : "N/A"}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {purchasePlan?.precisionModelo
-                        ? purchasePlan.precisionModelo >= 70
+                      {displayPlan?.precisionModelo
+                        ? displayPlan.precisionModelo >= 70
                           ? "Buena - Confianza alta"
-                          : purchasePlan.precisionModelo >= 50
+                          : displayPlan.precisionModelo >= 50
                           ? "Moderada - Confianza media"
-                          : purchasePlan.precisionModelo >= 30
+                          : displayPlan.precisionModelo >= 30
                           ? "Aceptable - Confianza baja"
                           : "Baja - Revisar datos"
                         : "Calculando..."}
@@ -342,7 +485,7 @@ export default function Forecasting() {
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {purchasePlan?.totalPrendas?.uds
-                        ? formatNumber(purchasePlan.totalPrendas.uds)
+                        ? formatNumber(displayPlan.totalPrendas.uds)
                         : "0"}
                     </div>
                     <p className="text-xs text-muted-foreground">Unidades recomendadas</p>
@@ -357,7 +500,7 @@ export default function Forecasting() {
                   <CardContent>
                     <div className="text-2xl font-bold">
                       {purchasePlan?.totalPrendas?.coste
-                        ? formatCurrency(purchasePlan.totalPrendas.coste)
+                        ? formatCurrency(displayPlan.totalPrendas.coste)
                         : "€0"}
                     </div>
                     <p className="text-xs text-muted-foreground">Coste estimado</p>
@@ -366,14 +509,14 @@ export default function Forecasting() {
               </div>
 
               {/* Confidence Panel - Show model quality metrics */}
-              {purchasePlan && purchasePlan.variablesUtilizadas && (
+              {displayPlan && displayPlan.variablesUtilizadas && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
                       <span>Confianza del Pronóstico</span>
                       {(() => {
-                        const coverage = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
-                        const mape = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
+                        const coverage = parseFloat(displayPlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
+                        const mape = parseFloat(displayPlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
                         const confidenceLevel = coverage >= 60 && mape < 30 ? 'Alta' : coverage >= 50 && mape < 50 ? 'Media' : 'Baja';
                         const badgeColor = confidenceLevel === 'Alta' ? 'bg-green-500' : confidenceLevel === 'Media' ? 'bg-yellow-500' : 'bg-orange-500';
                         return <span className={`text-xs px-2 py-1 rounded-full text-white ${badgeColor}`}>{confidenceLevel}</span>;
@@ -381,7 +524,7 @@ export default function Forecasting() {
                     </CardTitle>
                     <CardDescription>
                       {(() => {
-                        const coverage = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
+                        const coverage = parseFloat(displayPlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1] || '0');
                         return coverage >= 60 
                           ? 'Basado en datos históricos completos de múltiples temporadas' 
                           : 'Basado en datos disponibles con algunos productos sin historial suficiente';
@@ -394,7 +537,7 @@ export default function Forecasting() {
                       <div className="flex flex-col gap-1">
                         <p className="text-sm font-medium text-muted-foreground">Cobertura analizada</p>
                         <p className="text-2xl font-bold">
-                          {purchasePlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1]?.trim() || 'N/A'}
+                          {displayPlan.variablesUtilizadas.find((v: string) => v.includes('Cobertura'))?.split(':')[1]?.trim() || 'N/A'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Productos con datos suficientes para predicción
@@ -406,7 +549,7 @@ export default function Forecasting() {
                         <p className="text-sm font-medium text-muted-foreground">Precisión histórica</p>
                         <p className="text-2xl font-bold">
                           {(() => {
-                            const mape = parseFloat(purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
+                            const mape = parseFloat(displayPlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1] || '100');
                             return `${Math.max(0, 100 - mape).toFixed(1)}%`;
                           })()}
                         </p>
@@ -419,7 +562,7 @@ export default function Forecasting() {
                       <div className="flex flex-col gap-1">
                         <p className="text-sm font-medium text-muted-foreground">Variación media</p>
                         <p className="text-2xl font-bold">
-                          ±{purchasePlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1]?.trim() || 'N/A'}
+                          ±{displayPlan.variablesUtilizadas.find((v: string) => v.includes('MAPE'))?.split(':')[1]?.trim() || 'N/A'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Diferencia típica entre predicción y ventas reales
@@ -441,7 +584,7 @@ export default function Forecasting() {
                           <div>
                             <p className="text-sm font-medium">Temporada Objetivo</p>
                             <p className="text-xs text-muted-foreground">
-                              {purchasePlan.temporadaObjetivo} - Modelo usa solo datos históricos de temporadas similares ({purchasePlan.temporadaObjetivo.includes('Primavera') ? 'P/V' : 'O/I'})
+                              {displayPlan.temporadaObjetivo} - Modelo usa solo datos históricos de temporadas similares ({displayPlan.temporadaObjetivo.includes('Primavera') ? 'P/V' : 'O/I'})
                             </p>
                           </div>
                         </div>
@@ -522,7 +665,7 @@ export default function Forecasting() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {purchasePlan.rows.map((row: PurchasePlanRow, idx: number) => (
+                          {displayPlan.rows.map((row: PurchasePlanRow, idx: number) => (
                             <TableRow key={idx}>
                               <TableCell className="font-medium">{row.seccion}</TableCell>
                               <TableCell className="text-center">
@@ -554,38 +697,38 @@ export default function Forecasting() {
                             </TableRow>
                           ))}
                           {/* Total Row */}
-                          {purchasePlan.totalPrendas && (
+                          {displayPlan.totalPrendas && (
                             <TableRow className="bg-muted font-bold">
-                              <TableCell>{purchasePlan.totalPrendas.seccion}</TableCell>
+                              <TableCell>{displayPlan.totalPrendas.seccion}</TableCell>
                               <TableCell className="text-center">
-                                {formatNumber(purchasePlan.totalPrendas.pvpPorcentaje, 1)}%
+                                {formatNumber(displayPlan.totalPrendas.pvpPorcentaje, 1)}%
                               </TableCell>
                               <TableCell className="text-center">
-                                {formatNumber(purchasePlan.totalPrendas.contribucionPorcentaje, 1)}%
+                                {formatNumber(displayPlan.totalPrendas.contribucionPorcentaje, 1)}%
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatNumber(purchasePlan.totalPrendas.uds)}
+                                {formatNumber(displayPlan.totalPrendas.uds)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(purchasePlan.totalPrendas.pvp)}
+                                {formatCurrency(displayPlan.totalPrendas.pvp)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(purchasePlan.totalPrendas.coste)}
+                                {formatCurrency(displayPlan.totalPrendas.coste)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(purchasePlan.totalPrendas.profit)}
+                                {formatCurrency(displayPlan.totalPrendas.profit)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {purchasePlan.totalPrendas.opciones}
+                                {displayPlan.totalPrendas.opciones}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(purchasePlan.totalPrendas.pmCte)}
+                                {formatCurrency(displayPlan.totalPrendas.pmCte)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatCurrency(purchasePlan.totalPrendas.pmVta)}
+                                {formatCurrency(displayPlan.totalPrendas.pmVta)}
                               </TableCell>
                               <TableCell className="text-right">
-                                {formatNumber(purchasePlan.totalPrendas.mk, 1)}%
+                                {formatNumber(displayPlan.totalPrendas.mk, 1)}%
                               </TableCell>
                               <TableCell className="text-right">-</TableCell>
                               <TableCell className="text-right">-</TableCell>
@@ -598,13 +741,13 @@ export default function Forecasting() {
                     </div>
                     
                     {/* Summary Text */}
-                    {purchasePlan.totalPrendas && (
+                    {displayPlan.totalPrendas && (
                       <div className="mt-6 p-4 bg-muted/50 rounded-lg">
                         <p className="text-sm text-muted-foreground">
                           <strong>Resumen:</strong> El sistema recomienda comprar{" "}
-                          <strong>{formatNumber(purchasePlan.totalPrendas.uds)} unidades</strong> con una
+                          <strong>{formatNumber(displayPlan.totalPrendas.uds)} unidades</strong> con una
                           inversión estimada de{" "}
-                          <strong>{formatCurrency(purchasePlan.totalPrendas.coste)}</strong>. La predicción
+                          <strong>{formatCurrency(displayPlan.totalPrendas.coste)}</strong>. La predicción
                           se basa en análisis histórico de ventas y considera factores estacionales, tendencias
                           y rotación de inventario. Se recomienda revisar estas cifras periódicamente según
                           avance la temporada.

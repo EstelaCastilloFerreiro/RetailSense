@@ -59,4 +59,12 @@ Preferred communication style: Simple, everyday language.
 - **Database Hosting**: Neon Database (PostgreSQL)
 - **AI**: OpenAI API (for chatbot with `gpt-4o-mini`)
 
-**Planned ML/Analytics Stack**: Python backend services for ML predictions (e.g., CatBoost) to integrate with the existing Express API.
+**Python ML Stack** (Implemented Nov 10, 2025): Production Python ML forecasting engine with CatBoost and XGBoost AutoML for demand prediction.
+- **Dependencies**: `pandas`, `scikit-learn`, `catboost`, `xgboost`, `joblib`, `openpyxl`, `numpy`
+- **Modules**: `forecasting_engine/` with `preprocessing.py`, `training.py`, `prediction.py`, `plan_compras.py`, `main.py`
+- **Features**: Season extraction from Tema field, temporal train/test splits, AutoML model selection by MAPE, comprehensive metric reporting (MAPE, MAE, RMSE, product coverage)
+- **Integration**: Secure async job worker (`mlJobWorker.ts`) executing Python CLI with Zod validation, timeout handling, and JSON IPC
+- **API Endpoints**: `/api/ml/train` (train CatBoost/XGBoost models), `/api/ml/predict` (generate Plan de Compras for PV/OI seasons)
+- **UI**: Forecasting page selector between "Predicción Estándar (Ensemble)" and "Predicción Avanzada (CatBoost/XGBoost)"
+- **Current Capabilities**: ~58-60% product coverage at SKU level (limited by 1-year historical data for most products), better precision at section/family aggregation level. System designed to improve as more historical data accumulates.
+- **Commercial Positioning**: Focus on "99.8% coverage through hierarchical fallbacks", "improving each season with more data", and "actionable section-level insights"
