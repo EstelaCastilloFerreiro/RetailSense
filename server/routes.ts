@@ -55,6 +55,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Processing file:', req.file.originalname);
 
+      // Save file to disk for ML processing (create unique filename)
+      const timestamp = Date.now();
+      const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const diskFileName = `${clientId}_${timestamp}_${safeFileName}`;
+      const uploadPath = path.join(process.cwd(), 'uploads', diskFileName);
+      
+      fs.writeFileSync(uploadPath, buffer);
+      console.log('File saved to disk:', uploadPath);
+
       // Detect column structure
       const { detectedColumns, suggestedMappings } = detectColumnStructure(buffer);
       console.log('Detected columns:', Object.keys(detectedColumns));
@@ -75,10 +84,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('3. All rows being filtered out');
       }
 
-      // Save uploaded file metadata
+      // Save uploaded file metadata (including disk file name for ML)
       const uploadedFile = await storage.saveUploadedFile({
         clientId,
-        fileName: req.file.originalname,
+        fileName: diskFileName, // Store disk filename for ML access
         uploadDate: new Date().toISOString(),
         sheets,
       });
@@ -707,6 +716,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Available seasons retrieval error:", error);
       res.status(500).json({ 
         error: error.message || "Error retrieving available seasons" 
+      });
+    }
+  });
+
+  // ============================================================================
+  // ML FORECASTING ENDPOINTS (Python-based AutoML)
+  // ============================================================================
+
+  // Train ML models (CatBoost/XGBoost) for PV and OI seasons
+  app.post("/api/ml/train", async (req, res) => {
+    try {
+      const { fileId } = req.body;
+
+      if (!fileId) {
+        return res.status(400).json({ error: "fileId is required" });
+      }
+
+      // Get uploaded file metadata
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Construct file path (assume uploads are stored in ./uploads/)
+      const filePath = path.join(process.cwd(), 'uploads', `${uploadedFile.fileName}`);
+
+      // Check if file exists on disk
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ 
+          error: "Excel file not found on disk. Please re-upload the file." 
+        });
+      }
+
+      console.log(`Starting ML training for file: ${filePath}`);
+
+      // Execute training job asynchronously
+      const result = await executeTrainJob({
+        fileId,
+        filePath,
+      });
+
+      if (result.status === 'error') {
+        return res.status(500).json({
+          error: result.error,
+          logs: result.logs,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "ML models trained successfully",
+        results: result.data,
+      });
+
+    } catch (error: any) {
+      console.error("ML training error:", error);
+      res.status(500).json({
+        error: error.message || "Error training ML models",
+      });
+    }
+  });
+
+  // Generate ML forecast for next PV or OI season
+  app.post("/api/ml/predict", async (req, res) => {
+    try {
+      const { fileId, targetSeason, numTiendas } = req.body;
+
+      if (!fileId || !targetSeason) {
+        return res.status(400).json({ 
+          error: "fileId and targetSeason are required" 
+        });
+      }
+
+      if (!['next_PV', 'next_OI'].includes(targetSeason)) {
+        return res.status(400).json({ 
+          error: "targetSeason must be 'next_PV' or 'next_OI'" 
+        });
+      }
+
+      // Get uploaded file metadata
+      const uploadedFile = await storage.getUploadedFile(fileId);
+      if (!uploadedFile) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Construct file path
+      const filePath = path.join(process.cwd(), 'uploads', `${uploadedFile.fileName}`);
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ 
+          error: "Excel file not found on disk. Please re-upload the file." 
+        });
+      }
+
+      console.log(`Starting ML prediction for file: ${filePath}`);
+      console.log(`Target season: ${targetSeason}, Num tiendas: ${numTiendas || 10}`);
+
+      // Execute prediction job
+      const result = await executePredictJob({
+        fileId,
+        filePath,
+        targetSeason: targetSeason as 'next_PV' | 'next_OI',
+        numTiendas: numTiendas || 10,
+      });
+
+      if (result.status === 'error') {
+        return res.status(500).json({
+          error: result.error,
+          logs: result.logs,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "ML forecast generated successfully",
+        forecast: result.data,
+      });
+
+    } catch (error: any) {
+      console.error("ML prediction error:", error);
+      res.status(500).json({
+        error: error.message || "Error generating ML forecast",
       });
     }
   });
