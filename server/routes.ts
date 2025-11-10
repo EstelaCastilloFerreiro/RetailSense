@@ -18,6 +18,9 @@ import { processChatbotRequest } from "./services/chatbotService";
 import { createForecastJob, getForecastJob, getLatestForecastJob } from "./services/forecastingService";
 import { detectLatestSeason } from "./services/seasonalForecasting";
 import { forecastRequestSchema } from "@shared/schema";
+import { executeTrainJob, executePredictJob, TrainJobPayloadSchema, PredictJobPayloadSchema } from "./services/mlJobWorker";
+import fs from "fs";
+import path from "path";
 
 // Configure multer for file uploads
 const upload = multer({
