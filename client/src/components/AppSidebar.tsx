@@ -17,19 +17,19 @@ import { Button } from "@/components/ui/button";
 const menuItems = [
   {
     title: "Analytics",
-    url: "/analytics",
+    url: "/app/analytics",
     icon: BarChart3,
     description: "Visualizaciones y KPIs",
   },
   {
     title: "Forecasting",
-    url: "/forecasting",
+    url: "/app/forecasting",
     icon: TrendingUp,
     description: "Predicción de demanda",
   },
   {
     title: "Sentiment Analysis",
-    url: "/sentiment",
+    url: "/app/sentiment",
     icon: MessageSquare,
     description: "Análisis de sentimiento",
   },
@@ -38,7 +38,7 @@ const menuItems = [
 const utilityItems = [
   {
     title: "Cargar Datos",
-    url: "/upload",
+    url: "/app/upload",
     icon: Upload,
   },
 ];

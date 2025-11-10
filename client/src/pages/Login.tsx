@@ -29,7 +29,7 @@ export default function Login() {
     setTimeout(() => {
       localStorage.setItem("klob_authenticated", "true");
       localStorage.setItem("klob_user", username);
-      setLocation("/upload");
+      setLocation("/app/upload");
       toast({
         title: "Acceso concedido",
         description: `Bienvenido/a ${username}`,

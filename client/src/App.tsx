@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DataProvider } from "@/contexts/DataContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { LanguageProvider } from "@/i18n";
+import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Upload from "@/pages/Upload";
 import Analytics from "@/pages/Analytics";
@@ -20,7 +22,7 @@ function ProtectedRoute({ component: Component }: { component: () => JSX.Element
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setLocation("/");
+      setLocation("/login");
     }
   }, [isAuthenticated, setLocation]);
 
@@ -69,8 +71,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Login} />
-      <Route path="/analytics">
+      <Route path="/" component={Landing} />
+      <Route path="/login" component={Login} />
+      <Route path="/app/analytics">
         {() => (
           <ProtectedRoute
             component={() => (
@@ -81,7 +84,7 @@ function Router() {
           />
         )}
       </Route>
-      <Route path="/forecasting">
+      <Route path="/app/forecasting">
         {() => (
           <ProtectedRoute
             component={() => (
@@ -92,7 +95,7 @@ function Router() {
           />
         )}
       </Route>
-      <Route path="/sentiment">
+      <Route path="/app/sentiment">
         {() => (
           <ProtectedRoute
             component={() => (
@@ -103,7 +106,7 @@ function Router() {
           />
         )}
       </Route>
-      <Route path="/upload">
+      <Route path="/app/upload">
         {() => (
           <ProtectedRoute
             component={() => (
@@ -114,8 +117,11 @@ function Router() {
           />
         )}
       </Route>
+      <Route path="/analytics">
+        {() => <Redirect to="/app/analytics" />}
+      </Route>
       <Route path="/dashboard">
-        {() => <Redirect to="/analytics" />}
+        {() => <Redirect to="/app/analytics" />}
       </Route>
       <Route component={NotFound} />
     </Switch>
@@ -125,12 +131,14 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <DataProvider>
-          <Toaster />
-          <Router />
-        </DataProvider>
-      </TooltipProvider>
+      <LanguageProvider>
+        <TooltipProvider>
+          <DataProvider>
+            <Toaster />
+            <Router />
+          </DataProvider>
+        </TooltipProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }
