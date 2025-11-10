@@ -31,9 +31,9 @@ export function DashboardPreview() {
         >
           <Tabs defaultValue="analytics" className="w-full">
             <TabsList className="grid w-full max-w-md mx-auto grid-cols-3 mb-8">
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="forecasting">Forecasting</TabsTrigger>
-              <TabsTrigger value="sentiment">Sentiment</TabsTrigger>
+              <TabsTrigger value="analytics" data-testid="tab-analytics">Analytics</TabsTrigger>
+              <TabsTrigger value="forecasting" data-testid="tab-forecasting">Forecasting</TabsTrigger>
+              <TabsTrigger value="sentiment" data-testid="tab-sentiment">Sentiment</TabsTrigger>
             </TabsList>
 
             <TabsContent value="analytics" className="space-y-4">

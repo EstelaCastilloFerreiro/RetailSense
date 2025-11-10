@@ -17,7 +17,15 @@ Preferred communication style: Simple, everyday language.
 **Framework**: React 18 with TypeScript and Vite.
 **UI/UX**: Radix UI primitives with shadcn/ui components, inspired by Carbon/Ant Design for data-heavy B2B SaaS. Features a custom dark/light mode, Inter font for UI, and JetBrains Mono for numerical data. Tailwind CSS is used for layout.
 **State Management**: React Context API for global state, TanStack Query for server state and caching.
-**Routing**: Wouter, handling routes for `/`, `/analytics`, `/forecasting`, and `/sentiment`.
+**Routing**: Wouter with restructured routes - `/` for public landing page, `/login` for authentication, `/app/*` for authenticated application routes (analytics, forecasting, sentiment, upload).
+**Internationalization** (Implemented Nov 10, 2025): Complete i18n infrastructure with LanguageProvider React Context, bilingual support (ES/EN) via `i18n/es.ts` and `i18n/en.ts`, and LanguageSwitcher component for seamless language toggling.
+**Landing Page** (Implemented Nov 10, 2025): Professional marketing website at `/` with modular components inspired by Celonis design:
+- **HeroSection**: Animated gradients with CSS blob animations, headline with value proposition, dual CTAs (demo request + platform preview)
+- **FeaturesSection**: Three-column showcase for Analytics, Forecasting, and Sentiment modules with Framer Motion stagger animations
+- **DashboardPreview**: Interactive tabs displaying real app visualizations (KPI cards, forecast metrics, sentiment distribution)
+- **BenefitsSection**: Four statistical highlights with gradient backgrounds (40% stock reduction, 90% accuracy, 10x speed, 99.8% coverage)
+- **PricingSection**: CTA-focused demo request section
+- **LandingNav**: Fixed navigation with smooth scrolling, language switcher, and login/demo CTAs
 **Key Components**: `AppSidebar`, `FileUpload`, `FilterSidebar`, `DashboardTabs`, `KPICard`, `SentimentAnalysis`, and a section-aware `Chatbot`. Includes various charting components for sales, transfers, units by size, warehouse entries, sentiment distribution, and topic analysis, with expandable chart functionality.
 
 ### Backend Architecture
