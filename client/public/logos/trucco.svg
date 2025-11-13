@@ -1,0 +1,10 @@
+<svg width="250" height="90" viewBox="0 0 250 90" xmlns="http://www.w3.org/2000/svg">
+  <!-- TRUCCO Logo -->
+  <text x="125" y="40" font-family="'Times New Roman', serif" font-size="38" font-weight="bold" text-anchor="middle" fill="#1a1a1a" letter-spacing="3">
+    TRUCCO
+  </text>
+  <text x="125" y="65" font-family="Arial, sans-serif" font-size="13" font-weight="normal" text-anchor="middle" fill="#3a3a3a">
+    Since 1985
+  </text>
+</svg>
+

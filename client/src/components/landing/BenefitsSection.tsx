@@ -1,74 +1,106 @@
 import { motion } from "framer-motion";
 import { useLanguage } from "@/i18n";
+import { ArrowRight } from "lucide-react";
 
 export function BenefitsSection() {
   const { t } = useLanguage();
 
-  const stats = [
+  const caseStudies = [
     {
-      title: t.benefits.reduction.title,
-      description: t.benefits.reduction.description,
-      color: "from-blue-500 to-cyan-500",
+      badge: t.caseStudies.biosmartdata.badge,
+      title: t.caseStudies.biosmartdata.title,
+      description: t.caseStudies.biosmartdata.description,
+      image: "/case-studies/biosmartdata.jpg",
+      accentColor: "purple",
     },
     {
-      title: t.benefits.accuracy.title,
-      description: t.benefits.accuracy.description,
-      color: "from-purple-500 to-pink-500",
+      badge: t.caseStudies.civitatis.badge,
+      title: t.caseStudies.civitatis.title,
+      description: t.caseStudies.civitatis.description,
+      image: "/case-studies/civitatis.jpg",
+      accentColor: "purple",
     },
     {
-      title: t.benefits.time.title,
-      description: t.benefits.time.description,
-      color: "from-orange-500 to-red-500",
+      badge: t.caseStudies.crowdy.badge,
+      title: t.caseStudies.crowdy.title,
+      description: t.caseStudies.crowdy.description,
+      image: "/case-studies/crowdy.jpg",
+      accentColor: "purple",
     },
     {
-      title: t.benefits.coverage.title,
-      description: t.benefits.coverage.description,
-      color: "from-green-500 to-emerald-500",
+      badge: t.caseStudies.telefonica.badge,
+      title: t.caseStudies.telefonica.title,
+      description: t.caseStudies.telefonica.description,
+      image: "/case-studies/telefonica.jpg",
+      accentColor: "purple",
     },
   ];
 
   return (
-    <section className="py-24 bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900">
+    <section className="py-24 bg-white dark:bg-gray-950 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
         <motion.div
-          className="text-center mb-16"
+          className="mb-20"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-            {t.benefits.title}
+          <h2 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight">
+            <span className="italic font-normal">{t.caseStudies.title}</span> {t.caseStudies.titleHighlight}
           </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400">
-            {t.benefits.subtitle}
-          </p>
+          <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 cursor-pointer transition-colors mt-8">
+            <span className="text-sm">{t.caseStudies.scrollText}</span>
+            <ArrowRight className="h-4 w-4" />
+          </div>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={index}
-              className="relative"
-              initial={{ opacity: 0, scale: 0.9 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ scale: 1.05 }}
-            >
-              <div className="relative p-8 rounded-2xl bg-white dark:bg-gray-800 shadow-lg overflow-hidden">
-                <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-10`} />
-                <div className="relative">
-                  <div className={`text-4xl font-bold bg-gradient-to-r ${stat.color} bg-clip-text text-transparent mb-2`}>
-                    {stat.title}
+        <div className="grid md:grid-cols-2 gap-8">
+          {caseStudies.map((study, index) => {
+            return (
+              <motion.div
+                key={index}
+                className="group cursor-pointer"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+              >
+                <div className="border border-purple-200 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-800/50 overflow-hidden transition-all duration-300 bg-white dark:bg-gray-900 rounded-none h-full flex flex-col">
+                  {/* Image placeholder - cuando subas las imágenes, reemplaza esto */}
+                  <div className="aspect-video bg-purple-50 dark:bg-purple-900/10 flex items-center justify-center">
+                    <span className="text-sm text-purple-400 dark:text-purple-600">Imagen del caso de estudio</span>
                   </div>
-                  <p className="text-gray-600 dark:text-gray-400 font-medium">
-                    {stat.description}
-                  </p>
+                  {/* Cuando subas las imágenes, usa:
+                  <img 
+                    src={study.image} 
+                    alt={study.title}
+                    className="w-full h-48 object-cover"
+                  />
+                  */}
+                  
+                  <div className="p-8 flex flex-col flex-grow">
+                    <div className="mb-4">
+                      <span className="text-xs font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                        {study.badge}
+                      </span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 tracking-tight">
+                      {study.title}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 font-light mb-6 flex-grow">
+                      {study.description}
+                    </p>
+
+                    <div className="flex items-center gap-2 group-hover:gap-3 transition-all text-purple-600 dark:text-purple-400">
+                      <span className="text-sm font-medium">{t.caseStudies.readMore}</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>

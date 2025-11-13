@@ -1,0 +1,20 @@
+<svg width="280" height="80" viewBox="0 0 280 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cinzia Cortesi Logo -->
+  <defs>
+    <linearGradient id="cinziaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f5f5f5;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <text x="140" y="45" font-family="'Brush Script MT', cursive" font-size="32" font-weight="normal" text-anchor="middle" fill="#ffffff" filter="url(#glow)" style="font-style: italic;">
+    Cinzia Cortesi
+  </text>
+</svg>
+

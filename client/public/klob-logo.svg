@@ -1,13 +1,38 @@
-<svg width="160" height="50" viewBox="0 0 160 50" xmlns="http://www.w3.org/2000/svg">
-  <!-- K - Black bold sans-serif -->
-  <text x="0" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif" font-size="42" font-weight="900" fill="#000000" letter-spacing="0">K</text>
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#312e81;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
   
-  <!-- L - Black bold sans-serif -->
-  <text x="38" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif" font-size="42" font-weight="900" fill="#000000" letter-spacing="0">L</text>
+  <!-- Circle with gradient -->
+  <circle cx="60" cy="60" r="55" fill="url(#logoGradient)" />
   
-  <!-- O - Perfect circle in maroon/garnet #800020, aligned with capital letters, moved slightly to the right -->
-  <circle cx="81" cy="25" r="16" fill="#800020"/>
+  <!-- Dotted diagonal line -->
+  <line 
+    x1="12" 
+    y1="12" 
+    x2="108" 
+    y2="108" 
+    stroke="white" 
+    stroke-width="2.5" 
+    stroke-dasharray="3,3" 
+    opacity="0.95"
+  />
   
-  <!-- B - Black bold sans-serif -->
-  <text x="100" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif" font-size="42" font-weight="900" fill="#000000" letter-spacing="0">B</text>
+  <!-- Letter K in upper-right section -->
+  <text 
+    x="80" 
+    y="50" 
+    font-family="system-ui, -apple-system, sans-serif" 
+    font-size="52" 
+    font-weight="700" 
+    fill="white"
+    text-anchor="middle"
+    dominant-baseline="middle"
+  >
+    K
+  </text>
 </svg>

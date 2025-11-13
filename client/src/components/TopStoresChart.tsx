@@ -66,19 +66,23 @@ export default function TopStoresChart({ fileId, filters, showBottom = false, is
           <h3 className="text-lg font-medium mb-4">{title}</h3>
           <ResponsiveContainer width="100%" height={height}>
             <BarChart data={chartData} layout={expanded ? "vertical" : "horizontal"}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
               {expanded ? (
                 <>
                   <XAxis 
                     type="number"
-                    tick={{ fontSize: 14 }}
+                    stroke="#78716c"
+                    strokeWidth={1}
+                    tick={{ fill: '#57534e', fontSize: 14 }}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
                   />
                   <YAxis 
                     type="category"
                     dataKey="tienda"
                     width={250}
-                    tick={{ fontSize: 14 }}
+                    stroke="#78716c"
+                    strokeWidth={1}
+                    tick={{ fill: '#57534e', fontSize: 14 }}
                     interval={0}
                   />
                 </>
@@ -90,19 +94,24 @@ export default function TopStoresChart({ fileId, filters, showBottom = false, is
                     textAnchor="end"
                     height={xHeight}
                     interval={0}
-                    tick={{ fontSize: font }}
+                    stroke="#78716c"
+                    strokeWidth={1}
+                    tick={{ fill: '#57534e', fontSize: font }}
                   />
                   <YAxis 
-                    tick={{ fontSize: 12 }}
+                    stroke="#78716c"
+                    strokeWidth={1}
+                    tick={{ fill: '#57534e', fontSize: 12 }}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
                   />
                 </>
               )}
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "6px",
+                  backgroundColor: 'white',
+                  border: '1px solid #d6d3d1',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
                 formatter={(value: number, name: string) => {
                   if (name === 'beneficio') return [`${value.toLocaleString('es-ES', { minimumFractionDigits: 2 })}€`, 'Beneficio'];
@@ -110,7 +119,7 @@ export default function TopStoresChart({ fileId, filters, showBottom = false, is
                   return [value, name];
                 }}
               />
-              <Legend />
+              <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
               <Bar 
                 dataKey="beneficio" 
                 fill={getColorByIndex(0)} 

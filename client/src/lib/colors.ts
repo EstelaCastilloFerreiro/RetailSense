@@ -7,83 +7,83 @@
  */
 
 export const CHART_COLORS = {
-  // Primary color palette (beis y marrón clarito)
-  primary: '#d4a574', // Beis
-  primaryLight: '#e8c9a3', // Beis claro
-  primaryDark: '#b8905a', // Beis oscuro
+  // Primary color palette (purple - KLOB brand)
+  primary: '#9333ea', // Purple-600
+  primaryLight: '#a855f7', // Purple-500
+  primaryDark: '#7e22ce', // Purple-700
   
-  // Secondary colors (marrón clarito)
-  secondary: '#c19a6b', // Marrón claro
-  secondaryLight: '#d4b896', // Marrón muy claro
-  secondaryDark: '#a67c52', // Marrón medio
+  // Secondary colors (stone/beige - KLOB brand)
+  secondary: '#d6d3d1', // Stone-300
+  secondaryLight: '#e7e5e4', // Stone-200
+  secondaryDark: '#a8a29e', // Stone-400
   
   // Accent colors
-  accent: '#8b6f47', // Marrón medio
-  accentLight: '#a6865f',
-  accentDark: '#6f5638',
+  accent: '#78716c', // Stone-600
+  accentLight: '#a8a29e', // Stone-400
+  accentDark: '#57534e', // Stone-700
   
   // Semantic colors
-  // Verde oscuro para valores altos
-  success: '#2d5016', // Verde oscuro
-  successLight: '#4a7c2a',
-  successDark: '#1f370f',
+  // Green for positive values
+  success: '#10b981', // Emerald-500
+  successLight: '#34d399', // Emerald-400
+  successDark: '#059669', // Emerald-600
   
-  // Granate para valores bajos
-  danger: '#800020', // Granate
-  dangerLight: '#a0002a',
-  dangerDark: '#600018',
+  // Red for negative values
+  danger: '#ef4444', // Red-500
+  dangerLight: '#f87171', // Red-400
+  dangerDark: '#dc2626', // Red-600
   
-  warning: '#b8860b', // Marrón dorado
-  warningLight: '#d4af37',
-  warningDark: '#996b08',
+  warning: '#f59e0b', // Amber-500
+  warningLight: '#fbbf24', // Amber-400
+  warningDark: '#d97706', // Amber-600
   
-  // Additional palette colors (tonos tierra)
-  beige: '#f5e6d3',
-  beigeLight: '#faf5ed',
-  beigeDark: '#e8d5b7',
+  // Additional palette colors (purple and stone tones)
+  beige: '#e7e5e4', // Stone-200
+  beigeLight: '#f5f5f4', // Stone-100
+  beigeDark: '#d6d3d1', // Stone-300
   
-  brown: '#8b6f47',
-  brownLight: '#a6865f',
-  brownDark: '#6f5638',
+  brown: '#78716c', // Stone-600
+  brownLight: '#a8a29e', // Stone-400
+  brownDark: '#57534e', // Stone-700
   
-  // Chart series colors (tonos beis, marrón, verde oscuro, granate)
+  // Chart series colors (purple and stone tones)
   series: [
-    '#d4a574', // Beis
-    '#c19a6b', // Marrón claro
-    '#2d5016', // Verde oscuro (valores altos)
-    '#800020', // Granate (valores bajos)
-    '#b8905a', // Beis oscuro
-    '#a67c52', // Marrón medio
-    '#4a7c2a', // Verde medio
-    '#a0002a', // Granate claro
-    '#e8c9a3', // Beis muy claro
-    '#8b6f47', // Marrón
+    '#9333ea', // Purple-600
+    '#d6d3d1', // Stone-300
+    '#a855f7', // Purple-500
+    '#78716c', // Stone-600
+    '#7e22ce', // Purple-700
+    '#a8a29e', // Stone-400
+    '#c084fc', // Purple-400
+    '#57534e', // Stone-700
+    '#e7e5e4', // Stone-200
+    '#8b5cf6', // Purple-500 alternative
   ],
   
   // Map colors (for geographic visualizations)
-  // Verde oscuro para valores altos, granate para valores bajos
+  // Purple for high values, stone for low values
   map: {
     espana: {
-      high: '#2d5016', // Verde oscuro (valores altos)
-      mediumHigh: '#4a7c2a',
-      medium: '#c19a6b', // Marrón claro (medio)
-      mediumLow: '#d4a574', // Beis (medio-bajo)
-      low: '#800020', // Granate (valores bajos)
+      high: '#9333ea', // Purple-600 (valores altos)
+      mediumHigh: '#a855f7', // Purple-500
+      medium: '#d6d3d1', // Stone-300 (medio)
+      mediumLow: '#a8a29e', // Stone-400 (medio-bajo)
+      low: '#78716c', // Stone-600 (valores bajos)
     },
     italia: {
-      high: '#2d5016', // Verde oscuro (valores altos)
-      mediumHigh: '#4a7c2a',
-      medium: '#c19a6b', // Marrón claro (medio)
-      mediumLow: '#d4a574', // Beis (medio-bajo)
-      low: '#800020', // Granate (valores bajos)
+      high: '#9333ea', // Purple-600 (valores altos)
+      mediumHigh: '#a855f7', // Purple-500
+      medium: '#d6d3d1', // Stone-300 (medio)
+      mediumLow: '#a8a29e', // Stone-400 (medio-bajo)
+      low: '#78716c', // Stone-600 (valores bajos)
     },
   },
   
   // Gradient stops for continuous scales
   gradients: {
-    positive: ['#800020', '#d4a574', '#2d5016'], // Granate -> Beis -> Verde oscuro
-    negative: ['#800020', '#a0002a', '#c00034'], // Granate escalado
-    neutral: ['#d4a574', '#c19a6b', '#b8905a'], // Tonos beis/marrón
+    positive: ['#78716c', '#d6d3d1', '#9333ea'], // Stone -> Stone-light -> Purple
+    negative: ['#ef4444', '#f87171', '#fca5a5'], // Red escalado
+    neutral: ['#d6d3d1', '#a8a29e', '#78716c'], // Tonos stone
   },
 } as const;
 
@@ -121,20 +121,20 @@ export function getSemanticColor(value: number, type: 'positive' | 'negative' | 
 }
 
 /**
- * Get color based on value range (low = granate, high = verde oscuro)
- * Solo el valor más alto es verde oscuro, el más bajo es granate, el resto marrón clarito
+ * Get color based on value range (low = stone, high = purple)
+ * Solo el valor más alto es purple, el más bajo es stone oscuro, el resto stone claro
  */
 export function getValueColor(value: number, min: number, max: number): string {
-  if (max === min) return CHART_COLORS.secondary; // Marrón clarito si todos son iguales
+  if (max === min) return CHART_COLORS.secondary; // Stone claro si todos son iguales
   
-  // Solo el valor más alto es verde oscuro
-  if (value === max) return CHART_COLORS.success; // Verde oscuro
+  // Solo el valor más alto es purple
+  if (value === max) return CHART_COLORS.primary; // Purple
   
-  // Solo el valor más bajo es granate
-  if (value === min) return CHART_COLORS.danger; // Granate
+  // Solo el valor más bajo es stone oscuro
+  if (value === min) return CHART_COLORS.accent; // Stone oscuro
   
-  // Todo lo demás es marrón clarito
-  return CHART_COLORS.secondary; // Marrón clarito
+  // Todo lo demás es stone claro
+  return CHART_COLORS.secondary; // Stone claro
 }
 
 // Default export for compatibility

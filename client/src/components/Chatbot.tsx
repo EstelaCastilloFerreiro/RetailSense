@@ -134,12 +134,19 @@ export default function Chatbot({ section }: ChatbotProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={config.xAxis} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey={config.dataKey} fill={CHART_COLORS.primary}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+              <XAxis dataKey={config.xAxis} stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+              <YAxis stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'white', 
+                  border: '1px solid #d6d3d1', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
+              <Bar dataKey={config.dataKey} fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]}>
                 {data.map((entry: any, index: number) => {
                   const values = data.map((d: any) => d[config.dataKey]);
                   const max = Math.max(...values);
@@ -160,18 +167,26 @@ export default function Chatbot({ section }: ChatbotProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={config.xAxis} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+              <XAxis dataKey={config.xAxis} stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+              <YAxis stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'white', 
+                  border: '1px solid #d6d3d1', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
               {config.dataKeys.map((key: string, index: number) => (
                 <Line
                   key={key}
                   type="monotone"
                   dataKey={key}
-                  stroke={Object.values(CHART_COLORS)[index % Object.keys(CHART_COLORS).length]}
+                  stroke={CHART_COLORS.series[index % CHART_COLORS.series.length]}
                   strokeWidth={2}
+                  dot={{ fill: CHART_COLORS.series[index % CHART_COLORS.series.length], r: 4 }}
                 />
               ))}
             </LineChart>
@@ -190,16 +205,25 @@ export default function Chatbot({ section }: ChatbotProps) {
                 cy="50%"
                 outerRadius={100}
                 label
+                stroke="#ffffff"
+                strokeWidth={2}
               >
                 {data.map((entry: any, index: number) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={Object.values(CHART_COLORS)[index % Object.keys(CHART_COLORS).length]}
+                    fill={CHART_COLORS.series[index % CHART_COLORS.series.length]}
                   />
                 ))}
               </Pie>
-              <Tooltip />
-              <Legend />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'white', 
+                  border: '1px solid #d6d3d1', 
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
             </PieChart>
           </ResponsiveContainer>
         );

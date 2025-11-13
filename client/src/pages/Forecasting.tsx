@@ -73,19 +73,19 @@ export default function Forecasting() {
   const purchasePlan = latestJob?.results?.purchasePlan;
   
   // Determine which results to display (ML or standard)
-  const displayPlan = mlResults ? {
+  const displayPlan = (mlResults && mlResults.status !== 'error' && mlResults.plan_compras && Array.isArray(mlResults.plan_compras) && mlResults.plan_compras.length > 0) ? {
     modeloUtilizado: mlResults.modelo_ganador || 'ML',
     precisionModelo: mlResults.mape ? 100 - mlResults.mape : null,
     temporadaObjetivo: mlResults.temporada_objetivo || '',
-    totalUnidades: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.UDS || 0), 0) || 0,
-    totalInversion: mlResults.plan_compras?.reduce((sum: number, row: any) => sum + (row.COSTE || 0), 0) || 0,
+    totalUnidades: mlResults.plan_compras.reduce((sum: number, row: any) => sum + (row.UDS || row.uds || 0), 0),
+    totalInversion: mlResults.plan_compras.reduce((sum: number, row: any) => sum + (row.COSTE || row.coste || 0), 0),
     variablesUtilizadas: [
       `MAPE:${mlResults.mape?.toFixed(1) || 'N/A'}`,
       `MAE:${mlResults.mae?.toFixed(1) || 'N/A'}`,
       `RMSE:${mlResults.rmse?.toFixed(1) || 'N/A'}`,
       `Cobertura:${mlResults.cobertura_productos?.toFixed(1) || 'N/A'}%`
     ],
-    rows: mlResults.plan_compras?.map((row: any) => ({
+    rows: mlResults.plan_compras.map((row: any) => ({
       seccion: row.SECCION || row.seccion || '',
       pvpPorcentaje: row['% seccion'] || row.pvpPorcentaje || 0,
       contribucionPorcentaje: row['CONTRI.'] || row.contribucionPorcentaje || 0,
@@ -101,7 +101,7 @@ export default function Forecasting() {
       sobranPorcentaje: row.SOBRANTE || row.sobranPorcentaje || 0,
       porTienda: row['x tienda'] || row.porTienda || 0,
       porTalla: row['x talla'] || row.porTalla || 0,
-    })) || [],
+    })),
     cobertura_productos: mlResults.cobertura_productos,
   } : purchasePlan;
   
@@ -194,25 +194,45 @@ export default function Forecasting() {
         const error = await response.json();
         throw new Error(error.error || "Failed to generate ML prediction");
       }
-      return response.json();
+      const data = await response.json();
+      
+      // Check if the forecast data has an error status
+      if (data.forecast?.status === 'error') {
+        throw new Error(data.forecast.error || "Error al generar la predicción ML");
+      }
+      
+      return data;
     },
     onSuccess: (data) => {
       console.log("ML Prediction completed:", data);
-      setMlResults(data.forecast);
-      toast({
-        title: "Predicción ML completada",
-        description: `Plan de compras generado con ${data.forecast?.cobertura_productos?.toFixed(1) || 'N/A'}% de cobertura`,
-      });
+      
+      // Only set results if forecast data is valid
+      if (data.forecast && data.forecast.status !== 'error' && data.forecast.plan_compras) {
+        setMlResults(data.forecast);
+        toast({
+          title: "Predicción ML completada",
+          description: `Plan de compras generado con ${data.forecast?.cobertura_productos?.toFixed(1) || 'N/A'}% de cobertura`,
+        });
+      } else {
+        throw new Error("Los datos de predicción no están en el formato esperado");
+      }
     },
     onError: (error: any) => {
       const isTimeout = error.message?.includes('timeout') || error.message?.includes('timed out');
+      const isModelError = error.message?.includes('XGBoost') || error.message?.includes('model');
+      
       toast({
-        title: isTimeout ? "Tiempo de espera excedido" : "Error en predicción ML",
+        title: isTimeout ? "Tiempo de espera excedido" : isModelError ? "Error al cargar el modelo" : "Error en predicción ML",
         description: isTimeout 
           ? "La predicción tardó más de 2 minutos. Por favor, intente nuevamente o contacte soporte."
+          : isModelError
+          ? "El modelo ML no se pudo cargar. Por favor, vuelve a entrenar el modelo o usa la predicción estándar."
           : error.message || "No se pudo generar la predicción",
         variant: "destructive",
       });
+      
+      // Clear ML results on error
+      setMlResults(null);
     },
   });
 
@@ -257,12 +277,14 @@ export default function Forecasting() {
   };
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full bg-gradient-to-br from-stone-50/30 via-white to-purple-50/20 dark:from-gray-900 dark:via-gray-800 dark:to-gray-950">
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-full">
               <div>
-                <h1 className="text-3xl font-bold">Forecasting</h1>
-                <p className="text-muted-foreground">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-stone-600 bg-clip-text text-transparent tracking-tight">
+                  Forecasting
+                </h1>
+                <p className="text-muted-foreground mt-2 font-light">
                   Predicción automática de demanda y recomendaciones de compra basadas en Machine Learning
                 </p>
               </div>
@@ -271,6 +293,26 @@ export default function Forecasting() {
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-4">
+                  {/* Error message if ML failed */}
+                  {mlResults?.status === 'error' && (
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-red-900 dark:text-red-200 mb-1">
+                            Error al generar predicción ML
+                          </h4>
+                          <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                            {mlResults.error || "El modelo ML no se pudo cargar correctamente. Esto puede deberse a un problema de compatibilidad de versiones."}
+                          </p>
+                          <p className="text-sm text-red-600 dark:text-red-400">
+                            <strong>Sugerencia:</strong> Intenta usar la "Predicción Estándar (Ensemble)" que es más estable y no requiere modelos ML entrenados.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Mostrar últimos datos disponibles */}
                   {availableSeasons?.latestAvailable && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

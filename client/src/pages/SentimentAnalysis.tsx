@@ -73,9 +73,9 @@ interface Comment {
 }
 
 const COLORS = {
-  positivo: "#6AB04C",
-  neutro: "#B0BEC5",
-  negativo: "#E17055",
+  positivo: "#10b981", // Emerald-500 (green for positive)
+  neutro: "#d6d3d1", // Stone-300 (neutral)
+  negativo: "#ef4444", // Red-500 (red for negative)
 };
 
 export default function SentimentAnalysis() {
@@ -173,14 +173,14 @@ export default function SentimentAnalysis() {
     : [];
 
   return (
-    <div className="min-h-screen bg-[#F7F6F3] dark:bg-gray-900 p-6" data-testid="page-sentiment">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50/30 via-white to-purple-50/20 dark:from-gray-900 dark:via-gray-800 dark:to-gray-950 p-6" data-testid="page-sentiment">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="text-title">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-stone-600 bg-clip-text text-transparent tracking-tight" data-testid="text-title">
               Sentiment Analysis
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1" data-testid="text-subtitle">
+            <p className="text-gray-600 dark:text-gray-400 mt-2" data-testid="text-subtitle">
               Analiza cómo hablan tus clientes sobre tu marca en redes y reseñas
             </p>
           </div>
@@ -188,7 +188,7 @@ export default function SentimentAnalysis() {
             onClick={() => fetchMutation.mutate()}
             disabled={fetchMutation.isPending}
             data-testid="button-fetch"
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-purple-600 hover:bg-purple-700"
           >
             {fetchMutation.isPending ? (
               <>
@@ -245,11 +245,11 @@ export default function SentimentAnalysis() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Comentarios Analizados</p>
-                <p className="text-3xl font-bold mt-2 text-blue-600 dark:text-blue-400" data-testid="text-total-comments">
+                <p className="text-3xl font-bold mt-2 text-purple-600 dark:text-purple-400" data-testid="text-total-comments">
                   {loadingSummary ? "..." : (summary?.totalComments || 0).toLocaleString()}
                 </p>
               </div>
-              <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <MessageSquare className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
           </Card>
         </div>
@@ -317,12 +317,21 @@ export default function SentimentAnalysis() {
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
+                        stroke="#ffffff"
+                        strokeWidth={2}
                       >
                         {pieData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #d6d3d1', 
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }} 
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -339,14 +348,21 @@ export default function SentimentAnalysis() {
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={channelData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="positivo" stackId="a" fill={COLORS.positivo} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+                      <XAxis dataKey="name" stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                      <YAxis stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'white', 
+                          border: '1px solid #d6d3d1', 
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }} 
+                      />
+                      <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
+                      <Bar dataKey="positivo" stackId="a" fill={COLORS.positivo} radius={[0, 0, 4, 4]} />
                       <Bar dataKey="neutro" stackId="a" fill={COLORS.neutro} />
-                      <Bar dataKey="negativo" stackId="a" fill={COLORS.negativo} />
+                      <Bar dataKey="negativo" stackId="a" fill={COLORS.negativo} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -364,13 +380,20 @@ export default function SentimentAnalysis() {
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={charts?.timeSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="fecha" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="positivoPercent" stroke={COLORS.positivo} name="% Positivo" />
-                    <Line type="monotone" dataKey="negativoPercent" stroke={COLORS.negativo} name="% Negativo" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+                    <XAxis dataKey="fecha" stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                    <YAxis stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #d6d3d1', 
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }} 
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
+                    <Line type="monotone" dataKey="positivoPercent" stroke={COLORS.positivo} strokeWidth={2} name="% Positivo" dot={{ fill: COLORS.positivo, r: 4 }} />
+                    <Line type="monotone" dataKey="negativoPercent" stroke={COLORS.negativo} strokeWidth={2} name="% Negativo" dot={{ fill: COLORS.negativo, r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -387,13 +410,20 @@ export default function SentimentAnalysis() {
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={charts?.byTopic} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="tema" type="category" />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="positivo" fill={COLORS.positivo} />
-                    <Bar dataKey="negativo" fill={COLORS.negativo} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+                    <XAxis type="number" stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                    <YAxis dataKey="tema" type="category" stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #d6d3d1', 
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }} 
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
+                    <Bar dataKey="positivo" fill={COLORS.positivo} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="negativo" fill={COLORS.negativo} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { KLOBLogo } from "@/components/KLOBLogo";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -42,11 +43,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-primary/5 via-background to-primary/10">
       <header className="p-6 flex items-center justify-between border-b bg-background/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <img 
-            src="/klob-logo.svg" 
-            alt="KLOB Logo" 
-            className="h-12 w-auto"
-          />
+          <KLOBLogo className="h-12 w-auto" />
         </div>
       </header>
 

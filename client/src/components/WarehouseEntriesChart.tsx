@@ -59,21 +59,22 @@ export default function WarehouseEntriesChart({ fileId, filters }: WarehouseEntr
         <h3 className="text-lg font-medium mb-4">Entradas Almacén por Temporada</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-            <XAxis dataKey="temporada" />
-            <YAxis tickFormatter={(value) => value.toLocaleString('es-ES')} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
+            <XAxis dataKey="temporada" stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
+            <YAxis tickFormatter={(value) => value.toLocaleString('es-ES')} stroke="#78716c" strokeWidth={1} tick={{ fill: '#57534e', fontSize: 12 }} />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                borderRadius: "6px",
+                backgroundColor: 'white',
+                border: '1px solid #d6d3d1',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
               }}
               formatter={(value: number) => value.toLocaleString('es-ES')}
             />
             <Bar
               dataKey="total"
               fill={getColorByIndex(0)}
-              opacity={0.8}
+              radius={[4, 4, 0, 0]}
               name="Cantidad Entrada Almacén"
             />
           </BarChart>

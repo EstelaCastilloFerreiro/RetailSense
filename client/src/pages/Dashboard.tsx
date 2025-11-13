@@ -5,6 +5,7 @@ import FilterSidebar from "@/components/FilterSidebar";
 import DashboardTabs from "@/components/DashboardTabs";
 import ThemeToggle from "@/components/ThemeToggle";
 import Chatbot from "@/components/Chatbot";
+import { KLOBLogo } from "@/components/KLOBLogo";
 
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -29,11 +30,7 @@ export default function Dashboard() {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <img 
-              src="/klob-logo.svg" 
-              alt="KLOB Logo" 
-              className="h-10 w-auto"
-            />
+            <KLOBLogo className="h-10 w-auto" />
             <p className="text-xs text-muted-foreground hidden sm:block">Retail Analytics</p>
           </div>
           

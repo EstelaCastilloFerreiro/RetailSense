@@ -40,24 +40,27 @@ export default function DemandChart() {
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" strokeOpacity={0.5} />
           <XAxis
             dataKey="month"
-            className="text-xs"
-            tick={{ fill: "hsl(var(--muted-foreground))" }}
+            stroke="#78716c"
+            strokeWidth={1}
+            tick={{ fill: '#57534e', fontSize: 12 }}
           />
           <YAxis
-            className="text-xs"
-            tick={{ fill: "hsl(var(--muted-foreground))" }}
+            stroke="#78716c"
+            strokeWidth={1}
+            tick={{ fill: '#57534e', fontSize: 12 }}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "6px",
+              backgroundColor: 'white',
+              border: '1px solid #d6d3d1',
+              borderRadius: '8px',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
             }}
           />
-          <Legend />
+          <Legend wrapperStyle={{ fontSize: '12px', color: '#57534e' }} />
           <Area
             type="monotone"
             dataKey="upper"

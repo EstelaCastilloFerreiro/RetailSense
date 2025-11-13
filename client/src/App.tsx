@@ -15,6 +15,7 @@ import Analytics from "@/pages/Analytics";
 import Forecasting from "@/pages/Forecasting";
 import SentimentAnalysis from "@/pages/SentimentAnalysis";
 import NotFound from "@/pages/not-found";
+import { KLOBLogo } from "@/components/KLOBLogo";
 
 function ProtectedRoute({ component: Component }: { component: () => JSX.Element }) {
   const [, setLocation] = useLocation();
@@ -41,20 +42,18 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full bg-gradient-to-br from-stone-50/30 via-white to-purple-50/20 dark:from-gray-900 dark:via-gray-800 dark:to-gray-950">
         <AppSidebar />
         <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between p-6 border-b h-[6rem]">
+          <header className="flex items-center justify-between p-6 border-b h-[6rem] bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-6">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <div className="flex items-center gap-4">
-                <img 
-                  src="/klob-logo.svg" 
-                  alt="KLOB Logo" 
-                  className="h-12 w-auto"
-                />
+                <KLOBLogo className="h-12 w-auto" />
                 <div>
-                  <p className="text-base font-medium text-foreground leading-none">Retail Intelligence</p>
+                  <p className="text-base font-medium bg-gradient-to-r from-purple-600 to-stone-600 bg-clip-text text-transparent leading-none">
+                    Retail Intelligence
+                  </p>
                 </div>
               </div>
             </div>
